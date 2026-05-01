@@ -426,3 +426,32 @@ body.modal-open { overflow: hidden; }
 }
 .sort-dir-btn:hover { background: #f0e5cc; }
 .sort-dir-arrow { font-size: 1.05rem; line-height: 1; }
+
+/* Atlas scatter plot */
+#atlas-scatter-section {
+  margin: 1.5rem 0;
+}
+#atlas-scatter {
+  background: #f5f0e3;
+  border: 1px solid #d4cebd;
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+.scatter-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.scatter-tooltip {
+  position: absolute;
+  background: #2a2520;
+  color: #f5f0e3;
+  padding: 0.5em 0.75em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  line-height: 1.4;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  max-width: 280px;
+}

@@ -19,6 +19,17 @@
     <div id="atlas-info"></div>
   </section>
 
+  <section id="atlas-scatter-section">
+    <h2>Mechanical vs. humidity response (321 grounds)</h2>
+    <p class="muted">
+      Each point is one ground. Hover for details, click to open. Auxetic
+      grounds are to the left (negative ν<sub>min</sub>); humidity-active
+      grounds are toward the bottom (negative η<sub>pore</sub>, contracts when wet).
+    </p>
+    <div id="atlas-scatter"></div>
+    <div id="atlas-scatter-tooltip" class="scatter-tooltip" hidden></div>
+  </section>
+
   <section id="ground-list">
     <h2>Catalog</h2>
     <div class="catalog-controls">
@@ -103,6 +114,259 @@ function thumbPaths(s) {
     deformed:   `thumbnails/${fam}/${s.name}/deformed.png`,
     dispersion: `thumbnails/${fam}/${s.name}/dispersion.png`,
   };
+}
+
+
+function renderScatterPlot() {
+  const container = document.getElementById('atlas-scatter');
+  if (!container) return;
+  const grounds = (ATLAS && ATLAS.grounds) || [];
+  if (grounds.length === 0) return;
+
+  // Collect data points
+  const meta = ATLAS.metadata || {};
+  const bIdx = meta.beam_default_idx ?? 1;
+  const points = [];
+  for (const g of grounds) {
+    const nu = g.beam && g.beam.nu_min ? g.beam.nu_min[bIdx] : null;
+    const eta = g.humidity ? g.humidity.eta_pore : null;
+    if (typeof nu !== 'number' || typeof eta !== 'number') continue;
+    if (!Number.isFinite(nu) || !Number.isFinite(eta)) continue;
+    let cls = 'non';
+    if (g.beam && g.beam.classification) {
+      const c = g.beam.classification[bIdx];
+      if (c === 'homogeneously_auxetic') cls = 'hom';
+      else if (c === 'directionally_auxetic') cls = 'dir';
+    }
+    points.push({
+      family: g.family, name: g.name, nu: nu, eta: eta, cls: cls
+    });
+  }
+  if (points.length === 0) return;
+
+  // Plot dimensions
+  const W = 820, H = 480;
+  const M = { top: 24, right: 24, bottom: 60, left: 80 };
+  const innerW = W - M.left - M.right;
+  const innerH = H - M.top - M.bottom;
+
+  // Data ranges with a bit of padding
+  const nus = points.map(p => p.nu);
+  const etas = points.map(p => p.eta);
+  let nuMin = Math.min(...nus), nuMax = Math.max(...nus);
+  let etaMin = Math.min(...etas), etaMax = Math.max(...etas);
+  const nuPad = (nuMax - nuMin) * 0.05;
+  const etaPad = (etaMax - etaMin) * 0.05;
+  nuMin -= nuPad; nuMax += nuPad;
+  etaMin -= etaPad; etaMax += etaPad;
+
+  // Mappers
+  const x = nu => M.left + (nu - nuMin) / (nuMax - nuMin) * innerW;
+  const y = eta => M.top + innerH - (eta - etaMin) / (etaMax - etaMin) * innerH;
+
+  // Median lines for the four-corner reference
+  const sortedNus = [...nus].sort((a, b) => a - b);
+  const sortedEtas = [...etas].sort((a, b) => a - b);
+  const nuMed = sortedNus[Math.floor(sortedNus.length / 2)];
+  const etaMed = sortedEtas[Math.floor(sortedEtas.length / 2)];
+
+  // Build SVG
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('class', 'scatter-svg');
+
+  // Background
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', M.left); bg.setAttribute('y', M.top);
+  bg.setAttribute('width', innerW); bg.setAttribute('height', innerH);
+  bg.setAttribute('fill', '#fffaf0');
+  bg.setAttribute('stroke', '#2a2520'); bg.setAttribute('stroke-width', '1');
+  svg.appendChild(bg);
+
+  // Median lines (subtle)
+  const medLineStyle = { stroke: '#bbb', 'stroke-width': '1', 'stroke-dasharray': '3,3' };
+  const vMed = document.createElementNS(svgNS, 'line');
+  vMed.setAttribute('x1', x(nuMed)); vMed.setAttribute('x2', x(nuMed));
+  vMed.setAttribute('y1', M.top); vMed.setAttribute('y2', M.top + innerH);
+  Object.entries(medLineStyle).forEach(([k, v]) => vMed.setAttribute(k, v));
+  svg.appendChild(vMed);
+  const hMed = document.createElementNS(svgNS, 'line');
+  hMed.setAttribute('x1', M.left); hMed.setAttribute('x2', M.left + innerW);
+  hMed.setAttribute('y1', y(etaMed)); hMed.setAttribute('y2', y(etaMed));
+  Object.entries(medLineStyle).forEach(([k, v]) => hMed.setAttribute(k, v));
+  svg.appendChild(hMed);
+
+  // X-axis ticks
+  const xTicks = [Math.ceil(nuMin), 0, Math.floor(nuMax)];
+  for (let xt = Math.ceil(nuMin); xt <= Math.floor(nuMax); xt++) {
+    const tx = x(xt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', tx); tick.setAttribute('x2', tx);
+    tick.setAttribute('y1', M.top + innerH);
+    tick.setAttribute('y2', M.top + innerH + 4);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', tx); lbl.setAttribute('y', M.top + innerH + 18);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = xt;
+    svg.appendChild(lbl);
+  }
+
+  // Y-axis ticks
+  for (let yt = Math.ceil(etaMin * 10) / 10;
+        yt <= Math.floor(etaMax * 10) / 10 + 1e-9;
+        yt += 0.2) {
+    yt = Math.round(yt * 100) / 100;
+    if (yt < etaMin || yt > etaMax) continue;
+    const ty = y(yt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', M.left - 4); tick.setAttribute('x2', M.left);
+    tick.setAttribute('y1', ty); tick.setAttribute('y2', ty);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', M.left - 8); lbl.setAttribute('y', ty + 4);
+    lbl.setAttribute('text-anchor', 'end');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = yt.toFixed(1);
+    svg.appendChild(lbl);
+  }
+
+  // Axis labels
+  const xLabel = document.createElementNS(svgNS, 'text');
+  xLabel.setAttribute('x', M.left + innerW / 2);
+  xLabel.setAttribute('y', H - 14);
+  xLabel.setAttribute('text-anchor', 'middle');
+  xLabel.setAttribute('font-size', '16');
+  xLabel.setAttribute('font-weight', '700');
+  xLabel.setAttribute('fill', '#2a2520');
+  xLabel.textContent = 'ν_min (beam, AR=10) — load response';
+  svg.appendChild(xLabel);
+
+  const yLabel = document.createElementNS(svgNS, 'text');
+  yLabel.setAttribute('x', 18); yLabel.setAttribute('y', M.top + innerH / 2);
+  yLabel.setAttribute('text-anchor', 'middle');
+  yLabel.setAttribute('font-size', '16');
+  yLabel.setAttribute('font-weight', '700');
+  yLabel.setAttribute('fill', '#2a2520');
+  yLabel.setAttribute(
+    'transform', `rotate(-90, 18, ${M.top + innerH / 2})`);
+  yLabel.textContent = 'η_pore — humidity response';
+  svg.appendChild(yLabel);
+
+  // Quadrant captions: place at the four corners of the plot area,
+  // not near the medians where the dot cluster lives.
+  const captionStyle = (txt, xc, yc, anchor) => {
+    const el = document.createElementNS(svgNS, 'text');
+    el.setAttribute('x', xc); el.setAttribute('y', yc);
+    el.setAttribute('text-anchor', anchor);
+    el.setAttribute('font-size', '12');
+    el.setAttribute('font-style', 'italic');
+    el.setAttribute('fill', '#5a5a5a');
+    el.textContent = txt;
+    return el;
+  };
+  svg.appendChild(captionStyle(
+    'strong both', M.left + 14, M.top + innerH - 10, 'start'));
+  svg.appendChild(captionStyle(
+    'humidity-active only', M.left + innerW - 14, M.top + innerH - 10, 'end'));
+  svg.appendChild(captionStyle(
+    'auxetic only', M.left + 14, M.top + 18, 'start'));
+  svg.appendChild(captionStyle(
+    'neither', M.left + innerW - 14, M.top + 18, 'end'));
+
+  // Plot points
+  const colorByCls = { hom: '#a83232', dir: '#e08a3e', non: '#7a8a8a' };
+  const tooltip = document.getElementById('atlas-scatter-tooltip');
+
+  for (const p of points) {
+    const c = document.createElementNS(svgNS, 'circle');
+    c.setAttribute('cx', x(p.nu)); c.setAttribute('cy', y(p.eta));
+    c.setAttribute('r', '4');
+    c.setAttribute('fill', colorByCls[p.cls]);
+    c.setAttribute('fill-opacity', '0.7');
+    c.setAttribute('stroke', '#2a2520');
+    c.setAttribute('stroke-width', '0.5');
+    c.style.cursor = 'pointer';
+    c.dataset.family = p.family; c.dataset.name = p.name;
+
+    c.addEventListener('mouseenter', e => {
+      c.setAttribute('r', '6');
+      c.setAttribute('stroke-width', '1.5');
+      if (tooltip) {
+        tooltip.innerHTML =
+          `<strong>${p.family}/${p.name}</strong><br>` +
+          `ν_min = ${p.nu.toFixed(3)}<br>` +
+          `η_pore = ${p.eta.toFixed(3)}<br>` +
+          `<em>${p.cls === 'hom' ? 'homogeneously auxetic' :
+              p.cls === 'dir' ? 'directionally auxetic' : 'non-auxetic'}</em>`;
+        tooltip.hidden = false;
+      }
+    });
+    c.addEventListener('mousemove', e => {
+      if (tooltip) {
+        tooltip.style.left = (e.pageX + 12) + 'px';
+        tooltip.style.top = (e.pageY + 12) + 'px';
+      }
+    });
+    c.addEventListener('mouseleave', e => {
+      c.setAttribute('r', '4');
+      c.setAttribute('stroke-width', '0.5');
+      if (tooltip) tooltip.hidden = true;
+    });
+    c.addEventListener('click', e => {
+      if (tooltip) tooltip.hidden = true;
+      openModal(p.family, p.name);
+    });
+    svg.appendChild(c);
+  }
+
+  // Legend (with white background plate)
+  const lx = M.left + innerW - 130;
+  const ly = M.top + 10;
+  const legendData = [
+    ['hom', 'homogeneous'],
+    ['dir', 'directional'],
+    ['non', 'non-auxetic'],
+  ];
+  const legendBg = document.createElementNS(svgNS, 'rect');
+  legendBg.setAttribute('x', lx - 14);
+  legendBg.setAttribute('y', ly - 12);
+  legendBg.setAttribute('width', 130);
+  legendBg.setAttribute('height', legendData.length * 16 + 8);
+  legendBg.setAttribute('fill', '#fffaf0');
+  legendBg.setAttribute('fill-opacity', '0.92');
+  legendBg.setAttribute('stroke', '#cfc4ad');
+  legendBg.setAttribute('stroke-width', '0.5');
+  legendBg.setAttribute('rx', '3');
+  svg.appendChild(legendBg);
+  legendData.forEach(([cls, label], i) => {
+    const cy = ly + i * 16;
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', lx); dot.setAttribute('cy', cy);
+    dot.setAttribute('r', '4');
+    dot.setAttribute('fill', colorByCls[cls]);
+    dot.setAttribute('fill-opacity', '0.7');
+    dot.setAttribute('stroke', '#2a2520');
+    dot.setAttribute('stroke-width', '0.5');
+    svg.appendChild(dot);
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', lx + 10); t.setAttribute('y', cy + 4);
+    t.setAttribute('font-size', '11'); t.setAttribute('fill', '#2a2520');
+    t.textContent = label;
+    svg.appendChild(t);
+  });
+
+  container.innerHTML = '';
+  container.appendChild(svg);
 }
 
 function renderHeaderStats() {
@@ -295,6 +559,27 @@ function openModal(family, name) {
   }
   html += '</tbody></table>';
 
+
+  // Humidity / swelling-response section
+  const hg = ground.humidity || null;
+  if (hg && Number.isFinite(hg.eta_xx) && Number.isFinite(hg.eta_yy)) {
+    html += '<h3>Humidity response: macroscopic strain per unit perpendicular swelling</h3>';
+    html += '<p class="muted">Each strut treated as fiber-like; water swells perpendicular to strut axis. Negative values = lattice contracts when wet.</p>';
+    html += '<table class="auxetic-table"><thead><tr>';
+    html += '<th>Quantity</th><th class="num">value</th><th>interpretation</th>';
+    html += '</tr></thead><tbody>';
+    const fmt = (x) => (typeof x === 'number' && Number.isFinite(x))
+      ? (x >= 0 ? '+' : '') + x.toFixed(4)
+      : '—';
+    html += `<tr><td>η<sub>xx</sub></td><td class="num">${fmt(hg.eta_xx)}</td><td>x-strain per δ (isotropic perp swell)</td></tr>`;
+    html += `<tr><td>η<sub>yy</sub></td><td class="num">${fmt(hg.eta_yy)}</td><td>y-strain per δ</td></tr>`;
+    html += `<tr><td>η<sub>xy</sub></td><td class="num">${fmt(hg.eta_xy)}</td><td>shear strain per δ</td></tr>`;
+    html += `<tr><td>η<sub>aniso</sub></td><td class="num">${fmt(hg.eta_aniso)}</td><td>η<sub>xx</sub> − η<sub>yy</sub> (directional response)</td></tr>`;
+    html += `<tr><td>η<sub>pore</sub></td><td class="num">${fmt(hg.eta_pore)}</td><td>fractional pore-area change per δ</td></tr>`;
+    html += `<tr><td>η<sub>max</sub> / η<sub>min</sub></td><td class="num">${fmt(hg.eta_anisotropy_ratio)}</td><td>principal-strain ratio (frame-invariant)</td></tr>`;
+    html += '</tbody></table>';
+  }
+
   html += `<p class="muted">Defaults shown highlighted: spring k<sub>ang</sub> = ${sk}, beam AR = ${bAR}.</p>`;
 
   document.getElementById('modal-stats').innerHTML = html;
@@ -364,6 +649,7 @@ async function init() {
     SUMMARY = ATLAS.summary || [];
 
     renderHeaderStats();
+    renderScatterPlot();
     renderCatalogGrid();
 
     // Wire up the catalog controls

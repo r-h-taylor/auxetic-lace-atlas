@@ -119,6 +119,7 @@ from .mechanics_beam import (
     analyze_beam,
 )
 from .phonons import dispersion_features
+from .humidity import humidity_features
 
 
 # -----------------------------------------------------------------------
@@ -338,6 +339,9 @@ def build_ground_record(graph: LaceGraph, name: str, family: str,
 
     # Phonons (spring-model dispersion: 22 scalar descriptors)
     record["phonon"] = dispersion_features(graph, k_angular=0.01)
+
+    # Humidity / swelling response (perpendicular eigenstrain on each strut)
+    record["humidity"] = humidity_features(graph, k_angular=0.01)
 
     return record
 
