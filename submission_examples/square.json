@@ -1,0 +1,18 @@
+{
+  "name": "square_1x1",
+  "family": "user/square",
+  "tesselace_compliant": false,
+  "n_rows": 1,
+  "n_cols": 1,
+  "vertices": [[0, 0]],
+  "edges": [
+    {"src": 0, "dst": 0, "wrap": [1, 0]},
+    {"src": 0, "dst": 0, "wrap": [0, 1]}
+  ],
+  "lattice_vectors": [[1.0, 0.0], [0.0, 1.0]],
+  "provenance": {
+    "author": "Auxetic Lace Atlas demo",
+    "description": "Simple square lattice: one vertex per unit cell, one horizontal and one vertical edge wrapping to itself. This is the simplest possible 2-regular periodic graph and is mechanically isotropic with nu = 0.",
+    "license": "CC-BY 4.0"
+  }
+}

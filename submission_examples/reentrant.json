@@ -1,0 +1,20 @@
+{
+  "name": "reentrant_2x2",
+  "family": "user/reentrant",
+  "tesselace_compliant": false,
+  "n_rows": 2,
+  "n_cols": 2,
+  "vertices": [[0, 0], [1, 1]],
+  "edges": [
+    {"src": 0, "dst": 1, "wrap": [0, 0]},
+    {"src": 0, "dst": 1, "wrap": [-1, 0]},
+    {"src": 1, "dst": 0, "wrap": [1, 1]},
+    {"src": 1, "dst": 0, "wrap": [0, 1]}
+  ],
+  "lattice_vectors": [[1.0, 0.0], [0.0, 1.0]],
+  "provenance": {
+    "author": "Auxetic Lace Atlas demo",
+    "description": "A simplified 2-vertex re-entrant unit cell. Each vertex connects to the other via four wrap variants. Used as a synthetic test case for the contribution pipeline. Not a real lace ground.",
+    "license": "CC-BY 4.0"
+  }
+}

@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auxetic-lace-atlas"
+version = "0.1.0"
+description = "Mechanical metamaterial atlas derived from bobbin lace topologies"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Richard H. Taylor" },
+]
+keywords = ["mechanical-metamaterials", "auxetic", "lace", "homogenization"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-cov"]
+
+[project.scripts]
+auxetic-lace-scrape = "auxetic_lace.scrape_tesselace:main"
+auxetic-lace-build-atlas = "auxetic_lace.build_atlas:main"
+auxetic-lace-thumbnails = "auxetic_lace.build_thumbnails:main"
+auxetic-lace-validate = "auxetic_lace.contrib.validate_submission:main"
+auxetic-lace-compute = "auxetic_lace.contrib.compute_submission:main"
+auxetic-lace-rank = "auxetic_lace.contrib.rank_submission:main"
+auxetic-lace-add = "auxetic_lace.contrib.add_to_local_atlas:main"
+
+[project.urls]
+Homepage = "https://github.com/{your-username}/auxetic-lace-atlas"
+Documentation = "https://github.com/{your-username}/auxetic-lace-atlas#readme"
+Repository = "https://github.com/{your-username}/auxetic-lace-atlas"
+Issues = "https://github.com/{your-username}/auxetic-lace-atlas/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"auxetic_lace" = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"

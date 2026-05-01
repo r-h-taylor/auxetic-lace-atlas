@@ -1,0 +1,20 @@
+{
+  "name": "tri_2vert",
+  "family": "user/triangular",
+  "tesselace_compliant": false,
+  "n_rows": 1,
+  "n_cols": 2,
+  "vertices": [[0, 0], [1, 0]],
+  "edges": [
+    {"src": 0, "dst": 1, "wrap": [0, 0]},
+    {"src": 0, "dst": 0, "wrap": [0, 1]},
+    {"src": 1, "dst": 0, "wrap": [1, 0]},
+    {"src": 1, "dst": 1, "wrap": [0, 1]}
+  ],
+  "lattice_vectors": [[1.0, 0.0], [0.5, 0.866]],
+  "provenance": {
+    "author": "Auxetic Lace Atlas demo",
+    "description": "2-vertex unit cell on a skewed lattice — same topology as cloth_2x1 but on a 60-degree-tilted lattice instead of orthogonal. Tests the lattice-vector parameter.",
+    "license": "CC-BY 4.0"
+  }
+}

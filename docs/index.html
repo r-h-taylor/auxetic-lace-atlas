@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auxetic Lace Atlas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Auxetic Lace Atlas</h1>
+  <p class="tagline">A high-throughput mechanical screen of bobbin lace
+    topologies for 3D-printed metamaterial design.</p>
+</header>
+
+<main>
+  <section id="summary">
+    <h2>Loading…</h2>
+    <div id="atlas-info"></div>
+  </section>
+
+  <section id="ground-list">
+    <h2>Catalog</h2>
+    <div class="catalog-controls">
+      <input type="search" id="catalog-search"
+             placeholder="filter by family or name (e.g. 3_6 or 2x4_86)…"
+             autocomplete="off">
+      <select id="catalog-sort">
+        <option value="nu_min_beam">sort: ν_min (beam)</option>
+        <option value="nu_min_spring">sort: ν_min (spring k_ang=0.01)</option>
+        <option value="family">sort: family / name</option>
+        <option value="cell">sort: unit cell size</option>
+      </select>
+      <button id="catalog-sort-dir" type="button" class="sort-dir-btn"
+              aria-label="Toggle sort direction" title="Toggle ascending/descending">
+        <span class="sort-dir-arrow">↑</span>
+      </button>
+      <label class="catalog-toggle">
+        <input type="checkbox" id="catalog-only-auxetic">
+        only auxetic (ν<sub>min</sub> &lt; 0)
+      </label>
+      <span id="catalog-count" class="muted"></span>
+    </div>
+    <div id="ground-grid"></div>
+</section>
+
+  <section id="placeholder">
+    <h2>Interactive visualizer</h2>
+    <p>The interactive visualizer is under construction. When complete, it will
+      let you:</p>
+    <ul>
+      <li>Browse all 321 grounds organized by hole-shape family</li>
+      <li>See pair-diagram and thread-sketch swatches for each topology</li>
+      <li>Toggle between spring (pin-jointed) and beam (Euler-Bernoulli)
+        mechanical models</li>
+      <li>Slide through the parameter sweep (k<sub>ang</sub> for spring,
+        aspect ratio for beam)</li>
+      <li>Apply uniaxial tension at any angle and see the deformed
+        configuration animate</li>
+      <li>Plot ν(θ) on a polar diagram, with ν<sub>min</sub> and
+        ν<sub>max</sub> highlighted</li>
+      <li>Submit your own topologies and see how they rank against the
+        catalog</li>
+    </ul>
+    <p>For now, you can:</p>
+    <ul>
+      <li>Browse the source on
+        <a href="https://github.com/{your-username}/auxetic-lace-atlas">GitHub</a>
+      </li>
+      <li>Download the raw <a href="atlas.json"><code>atlas.json</code></a>
+        and <a href="thumbnails/"><code>thumbnails/</code></a></li>
+      <li>Read the <a href="https://github.com/{your-username}/auxetic-lace-atlas/blob/main/README.md">README</a>
+        for the full data model and pipeline</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <p>Bobbin lace ground topologies courtesy of
+    <a href="https://d-bl.github.io/tesselace-to-gf/">TesseLace</a>
+    by <a href="https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92">Veronika Irvine</a>,
+    licensed CC-BY 4.0.
+  </p>
+  <p>Code under MIT license. Atlas data CC-BY 4.0.
+    Source: <a href="https://github.com/{your-username}/auxetic-lace-atlas">GitHub</a>.</p>
+</footer>
+
+<script>
+// Globals so handlers can reach atlas data without re-fetching
+let ATLAS = null;
+let SUMMARY = [];
+
+function fmtNu(x) {
+  if (x === null || x === undefined) return '-';
+  return (x >= 0 ? '+' : '') + x.toFixed(3);
+}
+
+function thumbPaths(s) {
+  const fam = String(s.family).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return {
+    lace:       `thumbnails/${fam}/${s.name}/lace.png`,
+    thread:     `thumbnails/${fam}/${s.name}/thread.png`,
+    deformed:   `thumbnails/${fam}/${s.name}/deformed.png`,
+    dispersion: `thumbnails/${fam}/${s.name}/dispersion.png`,
+  };
+}
+
+function renderHeaderStats() {
+  const meta = ATLAS.metadata || {};
+  const counts = {};
+  for (const s of SUMMARY) {
+    const cls = s.spring_default_classification || 'unknown';
+    counts[cls] = (counts[cls] || 0) + 1;
+  }
+
+  document.querySelector('#summary h2').textContent =
+    `${meta.n_grounds || 0} grounds in the atlas`;
+
+  let html = '';
+  html += '<dl class="stats">';
+  html += '<dt>Build date</dt><dd>' + (meta.build_date || 'unknown').slice(0, 10) + '</dd>';
+  html += '<dt>Spring k<sub>ang</sub> grid</dt><dd><code>' +
+    JSON.stringify(meta.spring_k_ang_grid || []) + '</code></dd>';
+  html += '<dt>Beam aspect-ratio grid</dt><dd><code>' +
+    JSON.stringify(meta.beam_AR_grid || []) + '</code></dd>';
+  html += '</dl>';
+
+  html += '<h3>Classification at default spring parameters</h3>';
+  html += '<ul>';
+  for (const [cls, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
+    const pct = ((n / SUMMARY.length) * 100).toFixed(1);
+    html += `<li><strong>${cls}</strong>: ${n} (${pct}%)</li>`;
+  }
+  html += '</ul>';
+
+  // Top homogeneously-auxetic table (the headline result)
+  const topHom = SUMMARY
+    .filter(s => s.beam_default_nu_max !== null && s.beam_default_nu_max < 0)
+    .sort((a, b) => (a.beam_default_nu_min || 0) - (b.beam_default_nu_min || 0))
+    .slice(0, 10);
+  html += '<h3>Top homogeneously-auxetic grounds (beam model, AR=10)</h3>';
+  html += '<p class="muted">Homogeneous auxetics: ν<sub>max</sub> &lt; 0 in every direction. The 11-of-321 most rigorously auxetic subset; click any to inspect.</p>';
+  html += '<table class="auxetic-table"><thead><tr>' +
+    '<th>Family</th><th>Name</th><th class="num">ν<sub>min</sub></th><th class="num">ν<sub>max</sub></th><th>Class</th>' +
+    '</tr></thead><tbody>';
+  for (const s of topHom) {
+    html += `<tr class="clickable-row" data-family="${s.family}" data-name="${s.name}">
+      <td><code>${s.family}</code></td>
+      <td><code>${s.name}</code></td>
+      <td class="num">${fmtNu(s.beam_default_nu_min)}</td>
+      <td class="num">${fmtNu(s.beam_default_nu_max)}</td>
+      <td>${s.beam_default_classification}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  document.getElementById('atlas-info').innerHTML = html;
+
+  // Wire click on table rows to open modal
+  for (const tr of document.querySelectorAll('.clickable-row')) {
+    tr.addEventListener('click', () => {
+      openModal(tr.dataset.family, tr.dataset.name);
+    });
+  }
+}
+
+function renderCatalogGrid() {
+  const search = (document.getElementById('catalog-search').value || '').toLowerCase().trim();
+  const sortKey = document.getElementById('catalog-sort').value;
+  const dirBtn = document.getElementById('catalog-sort-dir');
+  const ascending = dirBtn.dataset.ascending !== 'false'; // default true
+  const onlyAux = document.getElementById('catalog-only-auxetic').checked;
+
+  // Filter
+  let filtered = SUMMARY.filter(s => {
+    if (onlyAux) {
+      if (s.beam_default_nu_min === null || s.beam_default_nu_min >= 0) return false;
+    }
+    if (!search) return true;
+    const haystack = `${s.family}/${s.name}`.toLowerCase();
+    return haystack.includes(search);
+  });
+
+  // Sort
+  switch (sortKey) {
+    case 'nu_min_beam':
+      filtered.sort((a, b) => (a.beam_default_nu_min ?? 1) - (b.beam_default_nu_min ?? 1));
+      break;
+    case 'nu_min_spring':
+      filtered.sort((a, b) => (a.spring_default_nu_min ?? 1) - (b.spring_default_nu_min ?? 1));
+      break;
+    case 'family':
+      filtered.sort((a, b) => {
+        const af = `${a.family}/${a.name}`;
+        const bf = `${b.family}/${b.name}`;
+        return af.localeCompare(bf);
+      });
+      break;
+    case 'cell':
+      filtered.sort((a, b) => {
+        const ac = (a.n_rows || 0) * (a.n_cols || 0);
+        const bc = (b.n_rows || 0) * (b.n_cols || 0);
+        if (ac !== bc) return ac - bc;
+        return `${a.family}/${a.name}`.localeCompare(`${b.family}/${b.name}`);
+      });
+      break;
+  }
+  if (!ascending) filtered.reverse();
+
+  // Render
+  document.getElementById('catalog-count').textContent =
+    `showing ${filtered.length} of ${SUMMARY.length}`;
+
+  const grid = document.getElementById('ground-grid');
+  let html = '';
+  for (const s of filtered) {
+    const tp = thumbPaths(s);
+    const cls = (s.beam_default_classification || '').replace(/_/g, ' ');
+    html += `<figure class="catalog-item" data-family="${s.family}" data-name="${s.name}">
+      <img src="${tp.lace}" alt="${s.family}/${s.name}" loading="lazy">
+      <figcaption>
+        <strong>${s.family}/${s.name}</strong><br>
+        <span class="meta">${s.n_rows}×${s.n_cols} cell · ${cls}</span><br>
+        ν<sub>min</sub> = ${fmtNu(s.beam_default_nu_min)},
+        ν<sub>max</sub> = ${fmtNu(s.beam_default_nu_max)}
+      </figcaption>
+    </figure>`;
+  }
+  grid.innerHTML = html;
+
+  for (const f of grid.querySelectorAll('.catalog-item')) {
+    f.addEventListener('click', () => {
+      openModal(f.dataset.family, f.dataset.name);
+    });
+  }
+}
+
+function openModal(family, name) {
+  const ground = ATLAS.grounds.find(g => g.family === family && g.name === name);
+  if (!ground) return;
+  const summaryEntry = SUMMARY.find(s => s.family === family && s.name === name) || {};
+  const tp = thumbPaths({family, name});
+
+  document.getElementById('modal-title').textContent = `${family}/${name}`;
+  // Reset to pair-diagram view on each open
+  setModalView('pair', tp);
+  // Stash thumb paths on the modal element so the arrow handlers can use them
+  document.getElementById('ground-modal').dataset.lacePath = tp.lace;
+  document.getElementById('ground-modal').dataset.threadPath = tp.thread;
+  document.getElementById('ground-modal').dataset.deformedPath = tp.deformed;
+  document.getElementById('ground-modal').dataset.dispersionPath = tp.dispersion;
+
+  // Build the stats panel
+  const meta = ATLAS.metadata || {};
+  const sIdx = meta.spring_default_idx ?? 2;
+  const bIdx = meta.beam_default_idx ?? 1;
+  const sk = meta.spring_k_ang_grid?.[sIdx];
+  const bAR = meta.beam_AR_grid?.[bIdx];
+
+  let html = '';
+  html += '<dl class="stats">';
+  html += `<dt>Family / Name</dt><dd>${family} / ${name}</dd>`;
+  html += `<dt>Period parallelogram</dt><dd>${ground.n_rows} × ${ground.n_cols}</dd>`;
+  html += `<dt>Vertices / Edges</dt><dd>${ground.n_vertices} / ${ground.n_edges}</dd>`;
+  html += `<dt>Cell area</dt><dd>${(ground.cell_area ?? 0).toFixed(3)}</dd>`;
+  html += '</dl>';
+
+  // Spring sweep table
+  html += '<h3>Spring model: ν vs angular regularization k<sub>ang</sub></h3>';
+  html += '<table class="auxetic-table"><thead><tr><th class="num">k<sub>ang</sub></th><th class="num">ν<sub>min</sub></th><th class="num">ν<sub>max</sub></th><th>Class</th></tr></thead><tbody>';
+  const sg = ground.spring || {};
+  for (let i = 0; i < (sg.k_ang || []).length; i++) {
+    const isDefault = i === sIdx;
+    html += `<tr${isDefault ? ' class="default-row"' : ''}>
+      <td class="num">${sg.k_ang[i]}</td>
+      <td class="num">${fmtNu(sg.nu_min[i])}</td>
+      <td class="num">${fmtNu(sg.nu_max[i])}</td>
+      <td>${sg.classification[i]}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  // Beam sweep table
+  html += '<h3>Beam model: ν vs rod aspect ratio</h3>';
+  html += '<table class="auxetic-table"><thead><tr><th class="num">aspect ratio</th><th class="num">ν<sub>min</sub></th><th class="num">ν<sub>max</sub></th><th>Class</th></tr></thead><tbody>';
+  const bg = ground.beam || {};
+  for (let i = 0; i < (bg.AR || []).length; i++) {
+    const isDefault = i === bIdx;
+    html += `<tr${isDefault ? ' class="default-row"' : ''}>
+      <td class="num">${bg.AR[i]}</td>
+      <td class="num">${fmtNu(bg.nu_min[i])}</td>
+      <td class="num">${fmtNu(bg.nu_max[i])}</td>
+      <td>${bg.classification[i]}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+
+  html += `<p class="muted">Defaults shown highlighted: spring k<sub>ang</sub> = ${sk}, beam AR = ${bAR}.</p>`;
+
+  document.getElementById('modal-stats').innerHTML = html;
+
+  const modal = document.getElementById('ground-modal');
+  modal.hidden = false;
+  document.body.classList.add('modal-open');
+}
+
+function setModalView(view, tp) {
+  // tp is optional; if absent, read paths from modal.dataset
+  const modal = document.getElementById('ground-modal');
+  const lace       = (tp && tp.lace)       || modal.dataset.lacePath;
+  const thread     = (tp && tp.thread)     || modal.dataset.threadPath;
+  const deformed   = (tp && tp.deformed)   || modal.dataset.deformedPath;
+  const dispersion = (tp && tp.dispersion) || modal.dataset.dispersionPath;
+  const img = document.getElementById('modal-image');
+  const cap = document.getElementById('modal-figcaption');
+  // Reset crop class
+  img.classList.remove('crop-left', 'crop-right');
+  if (view === 'deformed') {
+    img.src = deformed;
+    img.alt = 'deformed lace swatch';
+    cap.textContent = 'deformed under tension';
+  } else if (view === 'thread') {
+    img.src = thread;
+    img.alt = 'thread sketch';
+    cap.textContent = 'thread sketch — individual threads, default cross stitch';
+  } else if (view === 'dispersion') {
+    img.src = dispersion;
+    img.alt = 'phonon dispersion';
+    cap.textContent = 'phonon dispersion ω(k) along Γ–X–M–Γ — acoustic branches in red';
+  } else {
+    // 'pair' (default) or legacy 'lace'
+    img.src = lace;
+    img.alt = 'pair diagram';
+    cap.textContent = 'pair diagram — bands = thread pairs, pins = stitch interactions';
+  }
+  // Update tab highlights
+  document.querySelectorAll('.image-tab').forEach(t => {
+    t.classList.toggle('is-active', t.dataset.view === view);
+  });
+  modal.dataset.currentView = view;
+}
+
+function toggleModalView(direction) {
+  // direction: +1 forward, -1 back. Default forward.
+  const modal = document.getElementById('ground-modal');
+  const order = ['pair', 'thread', 'deformed', 'dispersion'];
+  const cur = modal.dataset.currentView || 'pair';
+  let idx = order.indexOf(cur);
+  if (idx < 0) idx = 0;
+  const next = (idx + (direction || 1) + order.length) % order.length;
+  setModalView(order[next]);
+}
+
+function closeModal() {
+  document.getElementById('ground-modal').hidden = true;
+  document.body.classList.remove('modal-open');
+}
+
+async function init() {
+  try {
+    const resp = await fetch('atlas.json');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    ATLAS = await resp.json();
+    SUMMARY = ATLAS.summary || [];
+
+    renderHeaderStats();
+    renderCatalogGrid();
+
+    // Wire up the catalog controls
+    document.getElementById('catalog-search').addEventListener('input', renderCatalogGrid);
+    document.getElementById('catalog-sort').addEventListener('change', renderCatalogGrid);
+    document.getElementById('catalog-only-auxetic').addEventListener('change', renderCatalogGrid);
+    document.getElementById('catalog-sort-dir').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      const ascending = btn.dataset.ascending !== 'false';
+      btn.dataset.ascending = ascending ? 'false' : 'true';
+      btn.querySelector('.sort-dir-arrow').textContent = ascending ? '↓' : '↑';
+      renderCatalogGrid();
+    });
+
+    // Modal close handlers
+    document.querySelector('.modal-close').addEventListener('click', closeModal);
+    document.getElementById('ground-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'ground-modal') closeModal();
+    });
+    // Arrow buttons
+    document.querySelector('.image-nav-prev').addEventListener('click', () => toggleModalView(-1));
+    document.querySelector('.image-nav-next').addEventListener('click', () => toggleModalView(+1));
+    // Tab buttons
+    document.querySelectorAll('.image-tab').forEach(t => {
+      t.addEventListener('click', () => setModalView(t.dataset.view));
+    });
+    // Keyboard
+    document.addEventListener('keydown', (e) => {
+      const modalOpen = !document.getElementById('ground-modal').hidden;
+      if (e.key === 'Escape') closeModal();
+      else if (modalOpen && e.key === 'ArrowLeft') toggleModalView(-1);
+      else if (modalOpen && e.key === 'ArrowRight') toggleModalView(+1);
+    });
+  } catch (err) {
+    document.querySelector('#summary h2').textContent = 'Atlas not yet built';
+    document.getElementById('atlas-info').innerHTML =
+      `<p class="error">Could not load atlas.json: <code>${err.message}</code>.<br>
+       This page will populate once the deploy workflow has run.</p>`;
+  }
+}
+
+init();
+</script>
+
+<!-- Catalog detail modal -->
+<div id="ground-modal" class="modal-overlay" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <button class="modal-close" type="button" aria-label="Close">&times;</button>
+    <h2 id="modal-title"></h2>
+    <div class="modal-body">
+      <div class="modal-image-viewer">
+        <button class="image-nav image-nav-prev" type="button" aria-label="Previous view">&lsaquo;</button>
+        <figure id="modal-figure">
+          <figcaption id="modal-figcaption">pair diagram + thread sketch</figcaption>
+          <img id="modal-image" alt="" loading="lazy">
+        </figure>
+        <button class="image-nav image-nav-next" type="button" aria-label="Next view">&rsaquo;</button>
+      </div>
+      <div class="image-tabs">
+        <button class="image-tab is-active" data-view="pair" type="button">pair diagram</button>
+        <button class="image-tab" data-view="thread" type="button">thread sketch</button>
+        <button class="image-tab" data-view="deformed" type="button">deformed under tension</button>
+        <button class="image-tab" data-view="dispersion" type="button">phonon dispersion</button>
+      </div>
+      <div id="modal-stats" class="modal-stats"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
