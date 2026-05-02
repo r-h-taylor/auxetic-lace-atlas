@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data — Aux-Mat Atlas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="page-data">
+<div id="preliminary-banner" role="note">
+    <strong>Preprint in preparation.</strong>
+    Please do not cite or redistribute without permission.
+  </div>
+<header>
+  <h1>Aux-Mat Atlas</h1>
+  <p class="tagline">Mechanical and dynamical screening of textile metamaterials</p>
+</header>
+  <nav class="page-nav" aria-label="Site sections">
+    <a class="nav-item" href="index.html">Home</a>
+    <a class="nav-item" href="about.html">About</a>
+    <span class="nav-item nav-current" aria-current="page">Data</span>
+  </nav>
+
+<main>
+      <section id="data-access">
+    <h2>Data access</h2>
+    <p>The catalog is distributed as a single static file. To use it
+       programmatically:</p>
+    <pre class="code-block"><code>import json, urllib.request
+url = 'atlas.json'  # or full URL once hosted publicly
+with urllib.request.urlopen(url) as f:
+    atlas = json.load(f)
+
+print(f"{atlas['metadata']['n_grounds']} grounds in version "
+      f"{atlas['metadata'].get('version', 'unknown')}")
+
+# Each ground is a dict with mechanical + dynamical + humidity fields
+for g in atlas['grounds']:
+    nu_min = g['beam']['nu_min'][1]   # AR=10 default
+    eta_pore = g['humidity']['eta_pore']
+    if nu_min &lt; -2 and eta_pore &lt; -0.3:
+        print(g['family'], g['name'], nu_min, eta_pore)</code></pre>
+    <p>For users who prefer a flat tabular form, a companion
+       <a href="atlas_features.csv"><code>atlas_features.csv</code></a> with
+       one row per ground is provided alongside the JSON.</p>
+    <p>See the <a href="#data-dictionary">data dictionary</a> below for
+       field meanings and units.</p>
+  </section>
+
+    <section id="data-dictionary">
+    <h2>Data dictionary</h2>
+    <p>Every field in <code>atlas.json</code>. All quantities are dimensionless
+       except where noted.</p>
+
+    <h3>Metadata (<code>atlas['metadata']</code>)</h3>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>n_grounds</code></td><td>int</td><td>Number of grounds in the catalog</td></tr>
+        <tr><td><code>build_date</code></td><td>str</td><td>ISO date the atlas was built</td></tr>
+        <tr><td><code>version</code></td><td>str</td><td>Catalog version (semantic versioning)</td></tr>
+        <tr><td><code>spring_k_ang_grid</code></td><td>list[float]</td><td>Angular-stiffness sweep values for spring model</td></tr>
+        <tr><td><code>spring_default_idx</code></td><td>int</td><td>Index into <code>spring_k_ang_grid</code> for the default value (0.01)</td></tr>
+        <tr><td><code>beam_AR_grid</code></td><td>list[float]</td><td>Strut aspect-ratio sweep values for beam model</td></tr>
+        <tr><td><code>beam_default_idx</code></td><td>int</td><td>Index into <code>beam_AR_grid</code> for the default (AR=10)</td></tr>
+        <tr><td><code>theta_grid_deg</code></td><td>list[float]</td><td>Angles (degrees) used for the directional ν(θ) sweep</td></tr>
+        <tr><td><code>attribution</code></td><td>str</td><td>Source-catalog citation string</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Per-ground top-level fields (<code>atlas['grounds'][i]</code>)</h3>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>family</code></td><td>str</td><td>Hole-shape profile (e.g. <code>3_6</code>, <code>4</code>, <code>cloth</code>)</td></tr>
+        <tr><td><code>name</code></td><td>str</td><td>Per-family identifier (e.g. <code>2x4_86</code>)</td></tr>
+        <tr><td><code>n_rows</code>, <code>n_cols</code></td><td>int</td><td>Period parallelogram dimensions</td></tr>
+        <tr><td><code>n_vertices</code>, <code>n_edges</code></td><td>int</td><td>Vertex / edge count in the unit cell</td></tr>
+        <tr><td><code>cell_area</code></td><td>float</td><td>Unit-cell area in lattice units</td></tr>
+        <tr><td><code>vertices</code></td><td>list[[col,row]]</td><td>Vertex coordinates in lattice units</td></tr>
+        <tr><td><code>edges</code></td><td>list[dict]</td><td>Edge list: <code>{src, dst, wrap: [dx,dy]}</code></td></tr>
+        <tr><td><code>lattice</code></td><td>list[[x,y]]</td><td>2×2 cartesian lattice basis vectors</td></tr>
+        <tr><td><code>thumbnails</code></td><td>dict</td><td>Paths to lace, thread, deformed, dispersion PNG previews</td></tr>
+        <tr><td><code>graph_canonical</code></td><td><code>str</code></td><td>SHA-256 hex hash of the wrap-labeled quotient graph's nauty certificate. Two grounds with the same value share an abstract topology (same combinatorial graph, possibly different geometric embedding).</td></tr>
+        <tr><td><code>lace_canonical</code></td><td><code>str</code></td><td>SHA-256 hex hash combining graph topology and embedding geometry. Two grounds with the same value are physically identical lattices. Every ground in the current catalog has a unique value.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Manufacturability (<code>g['manufacturability']</code>)</h3>
+    <p>Per-ground boolean predicates classifying the lattice's physical
+       realizability. Each property is one of: <code>true</code>, <code>false</code>,
+       or <code>null</code> (= "not yet checked").</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>is_2in2out</code></td><td>bool</td><td>Admits a directed orientation where every vertex has exactly 2 incoming and 2 outgoing edges. Required for bobbin-lace thread-circuit interpretation.</td></tr>
+        <tr><td><code>is_planar</code></td><td>bool | null</td><td>Embedded planar (no rod crossings) at the canonical vertex positions. <code>null</code> if not yet checked.</td></tr>
+        <tr><td><code>is_printable</code></td><td>bool | null</td><td>3D-printable: planar, connected, no degenerate vertices, no overlapping rods. <code>null</code> if not yet checked.</td></tr>
+        <tr><td><code>is_lace_workable</code></td><td>bool | null</td><td>Admits a valid bobbin-lace thread circuit decomposition with all circuits having wrap (1, 0). <code>null</code> if not yet checked.</td></tr>
+      </tbody>
+    </table>
+    <p>For grounds in Irvine's TesseLace catalog, all four properties are
+       known to be <code>true</code> by construction. Grounds added by the
+       enumerator have these properties computed individually.</p>
+
+    <h3>Provenance (<code>g['provenance']</code>)</h3>
+    <p>Where the ground came from.</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>source</code></td><td>str</td><td>Origin: <code>"irvine"</code> for grounds from Irvine's TesseLace catalog; <code>"enumerated_NxM"</code> for grounds discovered by the enumerator at cell size N&times;M; or other strings for future sources.</td></tr>
+        <tr><td><code>irvine_label</code></td><td>str | null</td><td>Original family/name in Irvine's catalog (e.g. <code>"3_6/2x4_86"</code>) for cross-reference. <code>null</code> for non-Irvine grounds.</td></tr>
+        <tr><td><code>enumerator_run</code></td><td>str | null</td><td>Identifier of the enumerator run that produced this ground. <code>null</code> for non-enumerated grounds.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Mechanics: spring model (<code>g['spring']</code>)</h3>
+    <p>The <em>spring model</em> (also referred to as the pin-jointed truss
+       model, or central-force lattice model) treats each strut as an axial
+       Hookean spring with stiffness <code>k = 1</code> per unit length and
+       frictionless pin joints at every vertex. To this base model we add a
+       small <em>angular regularization</em> term <code>k<sub>ang</sub></code>
+       at each vertex that penalizes changes in the angle between rods
+       meeting there:</p>
+    <p style="margin-left: 1.5rem;">
+      <code>U<sub>angular</sub> = (k<sub>ang</sub> / 2) &Sigma; (&theta;<sub>ij</sub> &minus; &theta;<sub>ij</sub><sup>(0)</sup>)<sup>2</sup></code>
+    </p>
+    <p>The angular term lifts mechanism-mode eigenvalues away from zero so
+       the stiffness matrix is invertible. Mechanism modes are kinematic
+       deformations that change vertex positions without stretching any rod
+       &mdash; they are central to auxetic behavior in this catalog. We sweep
+       <code>k<sub>ang</sub></code> over <code>spring_k_ang_grid</code>
+       (with axial stiffness fixed at 1) to characterize the sensitivity of
+       the elastic response to this regularization. The default reported value
+       is <code>k<sub>ang</sub> = 0.01</code>, where angular stiffness is 1%
+       of axial: mechanism modes remain soft but the calculation is
+       well-conditioned.</p>
+    <p>The spring model is distinct from the <em>beam model</em> below:
+       spring uses pin joints with adjustable angular regularization, beam
+       uses rigid Euler-Bernoulli joints with bending stiffness set by the
+       strut aspect ratio. Each field below is a list, one entry per value
+       in <code>spring_k_ang_grid</code>.</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>k_ang</code></td><td>list[float]</td><td>Angular regularization values (matches <code>spring_k_ang_grid</code>)</td></tr>
+        <tr><td><code>C_voigt</code></td><td>list[3×3]</td><td>Effective elastic stiffness in Voigt form</td></tr>
+        <tr><td><code>nu_profile</code></td><td>list[list[float]]</td><td>ν(θ) sampled on <code>theta_grid_deg</code></td></tr>
+        <tr><td><code>nu_min</code>, <code>nu_max</code></td><td>list[float]</td><td>Minimum / maximum Poisson ratio over loading direction</td></tr>
+        <tr><td><code>classification</code></td><td>list[str]</td><td>One of: <em>homogeneously_auxetic</em>, <em>directionally_auxetic</em>, <em>non_auxetic</em></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Mechanics: beam model (<code>g['beam']</code>)</h3>
+    <p>Same shape as the spring model but indexed by strut aspect ratio.</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>AR</code></td><td>list[float]</td><td>Aspect ratios (matches <code>beam_AR_grid</code>)</td></tr>
+        <tr><td><code>C_voigt</code>, <code>nu_profile</code>, <code>nu_min</code>, <code>nu_max</code>, <code>classification</code></td><td>(as above)</td><td>Per-AR analogues of the spring fields</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Phonon dispersion (<code>g['phonon']</code>)</h3>
+    <p>Spring-model phonon dispersion (k<sub>ang</sub> = 0.01) sampled on a
+       Brillouin-zone path. 22 scalar descriptors summarize the dispersion.</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>acoustic_min</code></td><td>float</td><td>Lowest non-zero acoustic-branch frequency</td></tr>
+        <tr><td><code>acoustic_max</code></td><td>float</td><td>Highest acoustic-branch frequency</td></tr>
+        <tr><td><code>v_long</code>, <code>v_trans</code></td><td>float</td><td>Long-wavelength longitudinal / transverse sound speed</td></tr>
+        <tr><td><code>v_anisotropy</code></td><td>float</td><td>Sound-speed anisotropy: max(v)/min(v) over BZ directions</td></tr>
+        <tr><td><code>flat_acoustic_score</code></td><td>float</td><td>0–1 measure of how flat the acoustic branch is (1 = mechanism)</td></tr>
+        <tr><td><code>soft_mode_count</code></td><td>int</td><td>Number of branches with frequency below threshold</td></tr>
+        <tr><td><em>(15 more)</em></td><td>various</td><td>Additional moments and gap descriptors. See <code>src/auxetic_lace/phonons.py</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Humidity / swelling response (<code>g['humidity']</code>)</h3>
+    <p>Macroscopic strain ε per unit perpendicular swelling δ on each strut
+       (fiber-grain model: water swells perpendicular to strut axis, not along it).</p>
+    <table class="data-dict">
+      <thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>eta_xx</code>, <code>eta_yy</code>, <code>eta_xy</code></td><td>float</td><td>Strain components under isotropic perpendicular swelling, in the cell frame</td></tr>
+        <tr><td><code>eta_xx_x</code>, <code>eta_yy_x</code>, <code>eta_xy_x</code></td><td>float</td><td>Same, but only x-aligned struts swell (probes anisotropic chemistry)</td></tr>
+        <tr><td><code>eta_aniso</code></td><td>float</td><td>η<sub>xx</sub> − η<sub>yy</sub> (cell-frame directional response)</td></tr>
+        <tr><td><code>eta_max</code>, <code>eta_min</code></td><td>float</td><td>Principal strains (frame-invariant)</td></tr>
+        <tr><td><code>eta_anisotropy_ratio</code></td><td>float</td><td>|η<sub>max</sub>/η<sub>min</sub>|, frame-invariant directionality</td></tr>
+        <tr><td><code>eta_pore</code></td><td>float</td><td>Fractional pore-area change per unit δ. Negative = pores close when wet.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+    <p class="author-line">
+      Aux-Mat is a project led by
+      <a href="https://scholar.google.com/citations?user=N6dbY7QAAAAJ&hl=en"
+         target="_blank" rel="noopener">Richard Taylor</a>.
+    </p>
+
+  <p>Bobbin lace ground topologies courtesy of
+    <a href="https://d-bl.github.io/tesselace-to-gf/">TesseLace</a>
+    by <a href="https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92">Veronika Irvine</a>,
+    licensed CC-BY 4.0.
+  </p>
+  <p>Code under MIT license. Atlas data CC-BY 4.0.
+    Source: <a href="https://github.com/{your-username}/auxetic-lace-atlas">GitHub</a>.</p>
+</footer>
+</body>
+</html>

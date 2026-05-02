@@ -1,4 +1,4 @@
-# Auxetic Lace Atlas
+# Aux-Mat Atlas
 
 An interactive atlas of mechanical metamaterials derived from bobbin
 lace topologies. Live site: https://auxetic-lace.github.io/atlas/

@@ -119,6 +119,8 @@ from .mechanics_beam import (
     analyze_beam,
 )
 from .phonons import dispersion_features
+from .canonicalize import both_canonical
+from .manufacturability import manufacturability_block, provenance_block
 from .humidity import humidity_features
 
 
@@ -343,12 +345,87 @@ def build_ground_record(graph: LaceGraph, name: str, family: str,
     # Humidity / swelling response (perpendicular eigenstrain on each strut)
     record["humidity"] = humidity_features(graph, k_angular=0.01)
 
+    # Canonical-form fingerprints for graph and lace
+    record.update(both_canonical(record))
+
+    # Manufacturability properties + provenance metadata
+    record["manufacturability"] = manufacturability_block(record, source="irvine")
+    record["provenance"] = provenance_block(
+        source="irvine",
+        irvine_label=f"{record['family']}/{record['name']}",
+    )
+
     return record
 
 
 # -----------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------
+
+def _write_features_csv(grounds, csv_path,
+                          spring_k_ang_grid, beam_AR_grid,
+                          spring_default_idx, beam_default_idx):
+    """Flatten each ground to a single CSV row of scalar fields.
+
+    Includes:
+      - Identification (family, name, n_rows, n_cols, n_vertices, n_edges, cell_area)
+      - Default-parameter mechanics (spring nu_min/nu_max at default k_ang,
+        beam nu_min/nu_max at default AR, classifications)
+      - All phonon scalar descriptors (if present)
+      - All humidity scalar descriptors (if present)
+    """
+    import csv
+
+    # Discover the field set from the first ground that has each block
+    sample = grounds[0] if grounds else {}
+    phonon_keys = sorted((sample.get("phonon") or {}).keys())
+    humidity_keys = sorted((sample.get("humidity") or {}).keys())
+
+    headers = [
+        "family", "name", "n_rows", "n_cols",
+        "n_vertices", "n_edges", "cell_area",
+        "spring_nu_min", "spring_nu_max", "spring_classification",
+        "beam_nu_min", "beam_nu_max", "beam_classification",
+    ]
+    headers += [f"phonon_{k}" for k in phonon_keys]
+    headers += [f"humidity_{k}" for k in humidity_keys]
+
+    with open(csv_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for g in grounds:
+            row = [
+                g.get("family", ""), g.get("name", ""),
+                g.get("n_rows", ""), g.get("n_cols", ""),
+                g.get("n_vertices", ""), g.get("n_edges", ""),
+                g.get("cell_area", ""),
+            ]
+            sp = g.get("spring", {})
+            bm = g.get("beam", {})
+            row.extend([
+                _safe_get(sp.get("nu_min"), spring_default_idx),
+                _safe_get(sp.get("nu_max"), spring_default_idx),
+                _safe_get(sp.get("classification"), spring_default_idx, ""),
+                _safe_get(bm.get("nu_min"), beam_default_idx),
+                _safe_get(bm.get("nu_max"), beam_default_idx),
+                _safe_get(bm.get("classification"), beam_default_idx, ""),
+            ])
+            ph = g.get("phonon") or {}
+            row.extend(ph.get(k, "") for k in phonon_keys)
+            hm = g.get("humidity") or {}
+            row.extend(hm.get(k, "") for k in humidity_keys)
+            writer.writerow(row)
+
+
+def _safe_get(seq, idx, default=""):
+    if seq is None:
+        return default
+    try:
+        v = seq[idx]
+    except (IndexError, TypeError):
+        return default
+    return default if v is None else v
+
 
 def main():
     ap = argparse.ArgumentParser(description="Build atlas.json from TesseLace catalog.")
@@ -443,6 +520,7 @@ def main():
     atlas = {
         "metadata": {
             "n_grounds": len(grounds),
+            "version": "0.1.0",
             "spring_k_ang_grid": SPRING_K_ANG_GRID,
             "spring_default_idx": spring_default_idx,
             "beam_AR_grid": BEAM_AR_GRID,
@@ -468,6 +546,20 @@ def main():
         json.dump(atlas, f, separators=(",", ":"))
     size_mb = os.path.getsize(args.output) / 1e6
     print(f"  {size_mb:.2f} MB")
+
+    # ---------------------------------------------------------------
+    # Companion CSV: one row per ground, all scalar fields flattened.
+    # Outsiders typically prefer this over nested JSON for pandas/R use.
+    # ---------------------------------------------------------------
+    csv_path = args.output.replace(".json", "_features.csv")
+    if csv_path == args.output:
+        csv_path = args.output + ".csv"
+    print(f"Writing {csv_path}...")
+    _write_features_csv(grounds, csv_path,
+                          SPRING_K_ANG_GRID, BEAM_AR_GRID,
+                          spring_default_idx, beam_default_idx)
+    size_kb = os.path.getsize(csv_path) / 1e3
+    print(f"  {size_kb:.1f} KB")
 
     # Summary stats
     print("\nQuick auxetic stats (spring, k_ang=0.01):")

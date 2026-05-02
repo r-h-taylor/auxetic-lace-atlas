@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>About — Aux-Mat Atlas</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="page-about">
+<div id="preliminary-banner" role="note">
+    <strong>Preprint in preparation.</strong>
+    Please do not cite or redistribute without permission.
+  </div>
+<header>
+  <h1>Aux-Mat Atlas</h1>
+  <p class="tagline">Mechanical and dynamical screening of textile metamaterials</p>
+</header>
+  <nav class="page-nav" aria-label="Site sections">
+    <a class="nav-item" href="index.html">Home</a>
+    <span class="nav-item nav-current" aria-current="page">About</span>
+    <a class="nav-item" href="data.html">Data</a>
+  </nav>
+
+<main>
+    <section id="about">
+    <h2>About this project</h2>
+
+    <p>Aux-Mat is an ongoing research project on the mechanical and
+       dynamical properties of textile metamaterials: periodic mesh
+       structures whose topologies are derived from textile-construction
+       patterns. The atlas presents each topology screened through three
+       independent physics models: static elasticity (spring + beam),
+       phonon dispersion, and humidity-driven swelling. A two-dimensional
+       classification of mechanical response distinguishes load-driven
+       auxeticity from swelling-driven contraction.</p>
+
+    <p>The current release (v0.1.0) characterizes 321 grounds from the
+       TesseLace catalog (Irvine 2016, CC-BY 4.0), an enumeration of
+       lattices satisfying a bobbin-lace fabricability constraint.
+       Subsequent releases will incorporate additional topology classes
+       derived from other textile-construction principles and from
+       broader enumeration of fabricable mesh structures.</p>
+
+    <h3>Browse the catalog</h3>
+    <p>All 321 grounds are available in the catalog above. Each ground's
+       modal includes pair-diagram and thread-sketch swatches, parameter
+       sweeps for the spring and beam models, the phonon dispersion, and
+       the humidity-response table. The scatter plot above the catalog
+       shows the (&nu;<sub>min</sub>, &eta;<sub>pore</sub>) relationship
+       across all grounds.</p>
+
+    <h3>Use the data</h3>
+    <p>The full atlas is available as JSON or as a flat CSV. See
+       <a href="#data-access">Data access</a> below for examples.</p>
+
+    <p>Comments and corrections are welcome. See the footer for contact.</p>
+  </section>
+
+  <section id="citation">
+    <h2>Cite this work</h2>
+    <p>If you cite this work, please cite the preprint below along with any other applicable entry-level citations.</p>
+    <pre class="bibtex"><code>@article{taylor2026auxetic,
+  author  = {Taylor, Richard H.},
+  title   = {Aux-Mat Atlas: a topology screen for periodic 2D
+             stick lattices derived from bobbin lace},
+  journal = {arXiv preprint arXiv:{TBD}},
+  year    = {2026},
+  url     = {https://arxiv.org/abs/{TBD}}
+}</code></pre>
+  </section>
+
+</main>
+
+<footer>
+    <p class="author-line">
+      Aux-Mat is a project led by
+      <a href="https://scholar.google.com/citations?user=N6dbY7QAAAAJ&hl=en"
+         target="_blank" rel="noopener">Richard Taylor</a>.
+    </p>
+
+  <p>Bobbin lace ground topologies courtesy of
+    <a href="https://d-bl.github.io/tesselace-to-gf/">TesseLace</a>
+    by <a href="https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92">Veronika Irvine</a>,
+    licensed CC-BY 4.0.
+  </p>
+  <p>Code under MIT license. Atlas data CC-BY 4.0.
+    Source: <a href="https://github.com/{your-username}/auxetic-lace-atlas">GitHub</a>.</p>
+</footer>
+</body>
+</html>
