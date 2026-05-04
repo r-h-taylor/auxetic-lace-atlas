@@ -371,6 +371,31 @@ def rotate_voigt(c_voigt: np.ndarray, theta: float) -> np.ndarray:
     return M @ c_voigt @ M.T
 
 
+def rotate_compliance(s_voigt: np.ndarray, theta: float) -> np.ndarray:
+    """Rotate a Voigt compliance matrix S by angle theta (radians).
+
+    The Bond rotation matrix used in rotate_voigt() is correct for
+    stiffness C, not for compliance S, because C and S transform under
+    rotation with different mixing of components when the Voigt
+    convention uses engineering shear strain (gamma_xy = 2*eps_xy)
+    on the strain side but plain sigma_xy on the stress side.
+
+    The robust way to rotate S is: invert it to get C, rotate C with
+    rotate_voigt, then invert back. We do it that way here.
+    """
+    if np.any(~np.isfinite(s_voigt)):
+        return np.full((3, 3), np.nan)
+    try:
+        c_voigt = np.linalg.inv(s_voigt)
+    except np.linalg.LinAlgError:
+        return np.full((3, 3), np.nan)
+    c_rot = rotate_voigt(c_voigt, theta)
+    try:
+        return np.linalg.inv(c_rot)
+    except np.linalg.LinAlgError:
+        return np.full((3, 3), np.nan)
+
+
 def poisson_ratio_at_angle(c_voigt: np.ndarray, theta: float) -> float:
     """Poisson ratio for uniaxial stress applied at angle theta (radians).
 
@@ -381,7 +406,7 @@ def poisson_ratio_at_angle(c_voigt: np.ndarray, theta: float) -> float:
         S = np.linalg.inv(c_voigt)
     except np.linalg.LinAlgError:
         return np.nan
-    S_rot = rotate_voigt(S, theta)
+    S_rot = rotate_compliance(S, theta)
     if abs(S_rot[0, 0]) < 1e-15:
         return np.nan
     return -S_rot[0, 1] / S_rot[0, 0]
@@ -431,7 +456,7 @@ def analyze(graph: LaceGraph,
         try:
             S = np.linalg.inv(C)
             # Compute rotated S_11 at each theta directly
-            S11_rot = np.array([rotate_voigt(S, t)[0, 0] for t in thetas])
+            S11_rot = np.array([rotate_compliance(S, t)[0, 0] for t in thetas])
             # Keep angles where rotated S_11 is finite and not dominated
             # by soft-mode contribution
             S_max = np.median(np.abs(S11_rot)) * 100  # heuristic

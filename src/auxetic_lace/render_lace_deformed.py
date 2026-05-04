@@ -178,8 +178,8 @@ def render_deformed_lace_swatch(ax, graph: LaceGraph,
 
     # Rotate compliance by theta_aux to get response under stress along
     # the auxetic axis. Use the existing rotate_voigt helper.
-    from .mechanics import rotate_voigt
-    S_rot = rotate_voigt(S, theta_aux)
+    from .mechanics import rotate_voigt, rotate_compliance
+    S_rot = rotate_compliance(S, theta_aux)
     # Pick a stress magnitude that produces strain_magnitude along x' axis:
     # eps_x' = S_rot[0,0] * sigma  =>  sigma = strain_magnitude / S_rot[0,0]
     if abs(S_rot[0, 0]) < 1e-12:
