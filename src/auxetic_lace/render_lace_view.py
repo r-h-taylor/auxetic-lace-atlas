@@ -268,27 +268,14 @@ def render_ground_lace_views(graph: LaceGraph,
 
 
 def render_ground_lace_views_split(graph: LaceGraph,
-                                    pair_path: str,
                                     thread_path: str,
                                     n_tiles: int = 5) -> None:
-    """Render the pair diagram and thread sketch into TWO separate PNGs.
-    Used by build_thumbnails for the visualizer (so each view fills its
-    container)."""
-    # Pair diagram — no embedded title, the visualizer's modal caption
-    # provides the labeling so we keep the image surface free of text.
+    """Render the chunky-bands view as thread.png.
+
+    The woven over-under "lace" view was dropped from the project; the
+    chunky-bands view is the canonical thumbnail per ground."""
     fig, ax = plt.subplots(1, 1, figsize=(8, 8))
     render_pair_diagram(ax, graph, n_tiles_x=n_tiles, n_tiles_y=n_tiles)
-    ax.set_title("")
-    out_dir = os.path.dirname(pair_path)
-    if out_dir:
-        os.makedirs(out_dir, exist_ok=True)
-    fig.savefig(pair_path, dpi=150, bbox_inches='tight', pad_inches=0.1,
-                facecolor='#f5f0e3')
-    plt.close(fig)
-
-    # Thread sketch — same: no title.
-    fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-    render_thread_diagram(ax, graph, n_tiles_x=n_tiles, n_tiles_y=n_tiles)
     ax.set_title("")
     out_dir = os.path.dirname(thread_path)
     if out_dir:
@@ -296,8 +283,7 @@ def render_ground_lace_views_split(graph: LaceGraph,
     fig.savefig(thread_path, dpi=150, bbox_inches='tight', pad_inches=0.1,
                 facecolor='#f5f0e3')
     plt.close(fig)
-
-    print(f"Saved {pair_path} + {thread_path}")
+    print(f"Saved {thread_path}")
 
 
 # -----------------------------------------------------------------------

@@ -330,7 +330,7 @@ def build_ground_record(graph: LaceGraph, name: str, family: str,
     if thumbnail_dir is not None:
         # Store relative paths the visualizer can use as URLs
         record["thumbnails"] = {
-            "lace": f"{thumbnail_dir}/{family}/{name}/lace.png",
+            "thread": f"{thumbnail_dir}/{family}/{name}/thread.png",
             "deformed": f"{thumbnail_dir}/{family}/{name}/deformed.png",
             "dispersion": f"{thumbnail_dir}/{family}/{name}/dispersion.png",
         }

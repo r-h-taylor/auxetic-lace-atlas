@@ -215,16 +215,11 @@ def is_lace_workable(ground: dict) -> bool:
             seen[ei] = True
     if not all(seen):
         return False
-    # Each circuit must wrap (0, ±1) on the toroidal quotient.
-    #
-    # Note on convention: Irvine's thesis text describes the wrap criterion
-    # as (1, 0), but in her stored data the "meridional" direction (the one
-    # threads should wrap around) is the second coordinate. The physically
-    # meaningful condition is "all circuits wrap exactly once around one
-    # axis and not at all around the other"; in the data convention this
-    # axis is the second.
+    # Each circuit must wrap (0, ±1) OR (±1, 0) — once around one axis, zero
+    # around the other. Irvine's stored data uses (0, ±1); other constructions
+    # may use (±1, 0). Both are valid lace-workable configurations.
     for _, wrap in circuits:
-        if wrap not in [(0, 1), (0, -1)]:
+        if wrap not in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
             return False
     return True
 

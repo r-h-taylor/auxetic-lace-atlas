@@ -125,8 +125,7 @@ def main():
                 skipped += 1
             else:
                 try:
-                    render_ground_lace_views_split(
-                        graph, thumbs["pair"], thumbs["thread"],
+                    render_ground_lace_views_split(graph, thumbs["thread"],
                         n_tiles=args.n_tiles)
                     rendered_lace += 1
                 except Exception as exc:

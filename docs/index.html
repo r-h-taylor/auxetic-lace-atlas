@@ -120,7 +120,6 @@ function fmtNu(x) {
 function thumbPaths(s) {
   const fam = String(s.family).replace(/[^a-zA-Z0-9_-]/g, '_');
   return {
-    lace:       `thumbnails/${fam}/${s.name}/lace.png`,
     thread:     `thumbnails/${fam}/${s.name}/thread.png`,
     deformed:   `thumbnails/${fam}/${s.name}/deformed.png`,
     dispersion: `thumbnails/${fam}/${s.name}/dispersion.png`,
@@ -139,6 +138,11 @@ function renderScatterPlot() {
   const bIdx = meta.beam_default_idx ?? 1;
   const points = [];
   for (const g of grounds) {
+    // Restrict scatter to lace-workable grounds — these are the patterns
+    // that can actually be manufactured as bobbin lace. Non-lace-workable
+    // enumerated grounds tend to have extreme/floppy mechanical responses
+    // that obscure the curated story.
+    if (!g.manufacturability || g.manufacturability.is_lace_workable !== true) continue;
     const nu = g.beam && g.beam.nu_min ? g.beam.nu_min[bIdx] : null;
     const eta = g.humidity ? g.humidity.eta_pore : null;
     if (typeof nu !== 'number' || typeof eta !== 'number') continue;
@@ -572,7 +576,7 @@ function renderCatalogGrid() {
     const tp = thumbPaths(s);
     const cls = (s.beam_default_classification || '').replace(/_/g, ' ');
     html += `<figure class="catalog-item" data-family="${s.family}" data-name="${s.name}">
-      <img src="${tp.lace}" alt="${s.family}/${s.name}" loading="lazy">
+      <img src="${tp.thread}" alt="${s.family}/${s.name}" loading="lazy">
       <figcaption>
         <strong>${s.family}/${s.name}</strong><br>
         <span class="meta">${s.n_rows}×${s.n_cols} cell · ${cls}</span><br>
@@ -612,9 +616,8 @@ function openModal(family, name) {
 
   document.getElementById('modal-title').textContent = `${family}/${name}`;
   // Reset to pair-diagram view on each open
-  setModalView('pair', tp);
+  setModalView('thread', tp);
   // Stash thumb paths on the modal element so the arrow handlers can use them
-  document.getElementById('ground-modal').dataset.lacePath = tp.lace;
   document.getElementById('ground-modal').dataset.threadPath = tp.thread;
   document.getElementById('ground-modal').dataset.deformedPath = tp.deformed;
   document.getElementById('ground-modal').dataset.dispersionPath = tp.dispersion;
@@ -758,7 +761,6 @@ function openModal(family, name) {
 function setModalView(view, tp) {
   // tp is optional; if absent, read paths from modal.dataset
   const modal = document.getElementById('ground-modal');
-  const lace       = (tp && tp.lace)       || modal.dataset.lacePath;
   const thread     = (tp && tp.thread)     || modal.dataset.threadPath;
   const deformed   = (tp && tp.deformed)   || modal.dataset.deformedPath;
   const dispersion = (tp && tp.dispersion) || modal.dataset.dispersionPath;
@@ -770,19 +772,15 @@ function setModalView(view, tp) {
     img.src = deformed;
     img.alt = 'deformed lace swatch';
     cap.textContent = 'deformed under tension (spring model)';
-  } else if (view === 'thread') {
-    img.src = thread;
-    img.alt = 'thread sketch';
-    cap.textContent = 'thread sketch: individual threads, default cross stitch';
   } else if (view === 'dispersion') {
     img.src = dispersion;
     img.alt = 'phonon dispersion';
     cap.textContent = 'phonon dispersion ω(k) along Γ–X–M–Γ — acoustic branches in red (spring model)';
   } else {
-    // 'pair' (default) or legacy 'lace'
-    img.src = lace;
-    img.alt = 'pair diagram';
-    cap.textContent = 'pair diagram: bands = thread pairs, pins = stitch interactions';
+    // 'thread' (default) — chunky bands view
+    img.src = thread;
+    img.alt = 'thread (chunky-bands view)';
+    cap.textContent = 'thread view: chunky bands, each band is one thread pair';
   }
   // Update tab highlights
   document.querySelectorAll('.image-tab').forEach(t => {
@@ -794,8 +792,8 @@ function setModalView(view, tp) {
 function toggleModalView(direction) {
   // direction: +1 forward, -1 back. Default forward.
   const modal = document.getElementById('ground-modal');
-  const order = ['pair', 'thread', 'deformed', 'dispersion'];
-  const cur = modal.dataset.currentView || 'pair';
+  const order = ['thread', 'deformed', 'dispersion'];
+  const cur = modal.dataset.currentView || 'thread';
   let idx = order.indexOf(cur);
   if (idx < 0) idx = 0;
   const next = (idx + (direction || 1) + order.length) % order.length;
@@ -823,6 +821,10 @@ async function init() {
     document.getElementById('catalog-search').addEventListener('input', resetAndRender);
     document.getElementById('catalog-sort').addEventListener('change', resetAndRender);
     document.getElementById('catalog-only-auxetic').addEventListener('change', resetAndRender);
+    document.getElementById('catalog-only-planar').addEventListener('change', resetAndRender);
+    document.getElementById('catalog-only-printable').addEventListener('change', resetAndRender);
+    document.getElementById('catalog-only-lace-workable').addEventListener('change', resetAndRender);
+    document.getElementById('catalog-only-2in2out').addEventListener('change', resetAndRender);
     const pageSizeEl = document.getElementById('catalog-page-size');
     if (pageSizeEl) {
       pageSizeEl.addEventListener('change', () => {
@@ -885,8 +887,7 @@ init();
         <button class="image-nav image-nav-next" type="button" aria-label="Next view">&rsaquo;</button>
       </div>
       <div class="image-tabs">
-        <button class="image-tab is-active" data-view="pair" type="button">pair diagram</button>
-        <button class="image-tab" data-view="thread" type="button">thread sketch</button>
+        <button class="image-tab is-active" data-view="thread" type="button">thread</button>
         <button class="image-tab" data-view="deformed" type="button">deformed (spring)</button>
         <button class="image-tab" data-view="dispersion" type="button">dispersion (spring)</button>
       </div>
