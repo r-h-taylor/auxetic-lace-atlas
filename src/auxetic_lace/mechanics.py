@@ -422,6 +422,83 @@ def poisson_profile(c_voigt: np.ndarray,
     return thetas, nus
 
 
+# ---------------------------------------------------------------------------
+# Directional moduli derived from C
+# ---------------------------------------------------------------------------
+#
+# E(theta) = 1 / S_11'(theta)   under uniaxial stress at angle theta
+# G(theta) = 1 / S_66'(theta)   under simple shear in a frame at angle theta
+# K        = 1 / (S_11 + S_22 + 2*S_12)   2D area-bulk, frame-invariant
+#
+# S' = rotate_compliance(S, theta) — uses the corrected compliance
+# rotation. Voigt convention here uses engineering shear strain
+# (gamma_xy = 2*eps_xy) so the S_66 entry already encodes the right
+# factor for shear modulus.
+
+def youngs_modulus_at_angle(c_voigt: np.ndarray, theta: float) -> float:
+    """Young's modulus for uniaxial stress at angle theta (radians).
+    E(theta) = 1 / S_11'(theta) where S' is the rotated compliance.
+    """
+    try:
+        S = np.linalg.inv(c_voigt)
+    except np.linalg.LinAlgError:
+        return np.nan
+    S_rot = rotate_compliance(S, theta)
+    if abs(S_rot[0, 0]) < 1e-15:
+        return np.nan
+    return 1.0 / S_rot[0, 0]
+
+
+def youngs_profile(c_voigt: np.ndarray,
+                    n_samples: int = 180) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute Young's modulus over angles theta in [0, pi).
+    Returns (thetas, E_values).
+    """
+    thetas = np.linspace(0, np.pi, n_samples, endpoint=False)
+    Es = np.array([youngs_modulus_at_angle(c_voigt, t) for t in thetas])
+    return thetas, Es
+
+
+def shear_modulus_at_angle(c_voigt: np.ndarray, theta: float) -> float:
+    """Shear modulus for simple shear in a frame at angle theta (radians).
+    G(theta) = 1 / S_66'(theta) in the rotated compliance.
+    """
+    try:
+        S = np.linalg.inv(c_voigt)
+    except np.linalg.LinAlgError:
+        return np.nan
+    S_rot = rotate_compliance(S, theta)
+    if abs(S_rot[2, 2]) < 1e-15:
+        return np.nan
+    return 1.0 / S_rot[2, 2]
+
+
+def shear_profile(c_voigt: np.ndarray,
+                   n_samples: int = 180) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute shear modulus over angles theta in [0, pi).
+    Returns (thetas, G_values).
+    """
+    thetas = np.linspace(0, np.pi, n_samples, endpoint=False)
+    Gs = np.array([shear_modulus_at_angle(c_voigt, t) for t in thetas])
+    return thetas, Gs
+
+
+def area_bulk_modulus(c_voigt: np.ndarray) -> float:
+    """2D area-bulk modulus K = 1 / (S_11 + S_22 + 2*S_12).
+    Frame-invariant: hydrostatic stress is scalar.
+    Returns NaN if compliance is singular or denominator vanishes.
+    """
+    try:
+        S = np.linalg.inv(c_voigt)
+    except np.linalg.LinAlgError:
+        return np.nan
+    denom = S[0, 0] + S[1, 1] + 2.0 * S[0, 1]
+    if abs(denom) < 1e-15:
+        return np.nan
+    return 1.0 / denom
+
+
+
 def analyze(graph: LaceGraph,
             L: np.ndarray = None,
             k_per_unit_length: float = 1.0,
