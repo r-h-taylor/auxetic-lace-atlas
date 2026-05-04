@@ -560,7 +560,8 @@ function renderCatalogGrid() {
       if (only2in2out && m.is_2in2out !== true) return false;
     }
     if (!search) return true;
-    const haystack = `${s.family}/${s.name}`.toLowerCase();
+    const haystack = [s.family, s.name, s.source, s.traditional_name]
+      .filter(x => x != null).join(' ').toLowerCase();
     return haystack.includes(search);
   });
 
