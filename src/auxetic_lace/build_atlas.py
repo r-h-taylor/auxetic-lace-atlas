@@ -310,7 +310,8 @@ def build_ground_record(graph: LaceGraph, name: str, family: str,
     # Geometry
     vertices_uc = [[v[0], v[1]] for v in graph.vertices]   # (col, row)
     edges = [{"src": e.src_idx, "dst": e.dst_idx,
-              "wrap": [e.wrap[0], e.wrap[1]]}
+              "wrap": [e.wrap[0], e.wrap[1]],
+              "polyline": [list(p) for p in e.polyline]}
              for e in graph.edges]
     A = cell_area(graph, L)
 

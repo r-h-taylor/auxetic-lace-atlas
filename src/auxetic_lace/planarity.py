@@ -186,96 +186,60 @@ def _vertex_endpoint_set(ground: dict) -> set:
 # ---------------------------------------------------------------------------
 
 def is_planar(ground: dict) -> bool:
-    """Return True iff the straight-line (or polyline) embedding of the
-    periodic graph has no edge crossings except at shared vertex endpoints.
+    """Test whether the ground is planar in the cell-coordinate embedding.
 
-    Tests the embedding as drawn in the universal cover using the polyline
-    data and wrap info. This is the right notion of planarity for a
-    periodic graph drawn in the infinite plane: no rod crosses another
-    rod except at a common pin.
+    For each edge, build its polyline-segment list:
+      - If the edge has a 'polyline' field with >= 2 points, use those segments
+        directly (in extended cell coords).
+      - Otherwise, fall back to a single straight segment from src to dst+wrap.
+
+    Then test all pairs of segments (across all edges) for off-pin (interior)
+    intersection. Off-pin means the intersection is strictly interior to both
+    segments (not at a shared endpoint).
+
+    Returns True if no off-pin intersections found.
     """
-    n_edges = len(ground.get("edges", []))
-    if n_edges < 2:
-        return True
+    n_cols = ground["n_cols"]
+    n_rows = ground["n_rows"]
+    vertices = ground["vertices"]
 
-    # Pre-compute segments and endpoint set
-    segs_per_edge = [_edge_segments(ground, i) for i in range(n_edges)]
-    vertex_pts = _vertex_endpoint_set(ground)
+    segments = []
+    for ei, e in enumerate(ground["edges"]):
+        polyline = e.get("polyline")
+        if polyline and len(polyline) >= 2:
+            for si in range(len(polyline) - 1):
+                p1 = tuple(polyline[si])
+                p2 = tuple(polyline[si + 1])
+                segments.append((p1, p2, ei, si))
+        else:
+            src = vertices[e["src"]]
+            dst = vertices[e["dst"]]
+            wrap = e["wrap"]
+            p1 = (src[0], src[1])
+            p2 = (dst[0] + wrap[0] * n_cols, dst[1] + wrap[1] * n_rows)
+            segments.append((p1, p2, ei, 0))
 
-    # Test all pairs
-    for i in range(n_edges):
-        for j in range(i + 1, n_edges):
-            for s1 in segs_per_edge[i]:
-                for s2 in segs_per_edge[j]:
-                    if _segments_intersect_interior(s1[0], s1[1], s2[0], s2[1],
-                                                     vertex_pts):
-                        return False
+    for i in range(len(segments)):
+        p1, p2, ei1, si1 = segments[i]
+        for j in range(i + 1, len(segments)):
+            p3, p4, ei2, si2 = segments[j]
+            if _segments_cross_off_pin(p1, p2, p3, p4):
+                return False
     return True
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def _orient(a, b, c):
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 
-if __name__ == "__main__":
-    import json
-    import sys
 
-    atlas_path = sys.argv[1] if len(sys.argv) > 1 else "docs/atlas.json"
-    with open(atlas_path) as f:
-        atlas = json.load(f)
-    grounds = atlas["grounds"]
-
-    print(f"Running is_planar on {len(grounds)} grounds...")
-    print()
-    print("NOTE: This straight-line checker is the right test for taylor")
-    print("grounds (synthesized straight polylines). For Irvine grounds it")
-    print("over-reports non-planarity because Irvine uses curved polylines")
-    print("we don't have access to in atlas.json. Treat Irvine results as")
-    print("diagnostic only.")
-    print()
-
-    n_irvine_pass = 0
-    n_irvine_fail = 0
-    n_taylor_pass = 0
-    n_taylor_fail = 0
-    irvine_passes = []
-    taylor_passes = []
-
-    for g in grounds:
-        ok = is_planar(g)
-        is_irvine = (g.get("provenance", {}).get("source") == "irvine")
-        is_taylor = (str(g.get("provenance", {}).get("source", ""))
-                       .startswith("taylor_"))
-        if is_irvine:
-            if ok:
-                n_irvine_pass += 1
-                irvine_passes.append(f"{g['family']}/{g['name']}")
-            else:
-                n_irvine_fail += 1
-        elif is_taylor:
-            if ok:
-                n_taylor_pass += 1
-                taylor_passes.append(f"{g['family']}/{g['name']}")
-            else:
-                n_taylor_fail += 1
-
-    n_irvine = n_irvine_pass + n_irvine_fail
-    n_taylor = n_taylor_pass + n_taylor_fail
-    print(f"  Irvine (straight-line check, diagnostic):")
-    print(f"     {n_irvine_pass} pass / {n_irvine} total "
-          f"({100 * n_irvine_pass / max(n_irvine, 1):.1f}%)")
-    print(f"  Taylor (real check):")
-    print(f"     {n_taylor_pass} pass / {n_taylor} total "
-          f"({100 * n_taylor_pass / max(n_taylor, 1):.1f}%)")
-    print()
-    if taylor_passes:
-        print(f"  Taylor planar grounds ({len(taylor_passes)}):")
-        for f in taylor_passes[:30]:
-            print(f"    {f}")
-        if len(taylor_passes) > 30:
-            print(f"    ... and {len(taylor_passes) - 30} more")
-    if irvine_passes and len(irvine_passes) < 50:
-        print(f"\n  Irvine planar by straight-line drawing ({len(irvine_passes)}):")
-        for f in irvine_passes[:30]:
-            print(f"    {f}")
+def _segments_cross_off_pin(p1, p2, p3, p4):
+    """True iff the segments (p1,p2) and (p3,p4) cross at a point strictly
+    interior to both segments."""
+    o1 = _orient(p1, p2, p3)
+    o2 = _orient(p1, p2, p4)
+    o3 = _orient(p3, p4, p1)
+    o4 = _orient(p3, p4, p2)
+    if ((o1 > 0 and o2 < 0) or (o1 < 0 and o2 > 0)) and \
+       ((o3 > 0 and o4 < 0) or (o3 < 0 and o4 > 0)):
+        return True
+    return False

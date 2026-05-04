@@ -52,19 +52,41 @@ from typing import List, Tuple, Dict
 def _edge_angle_at_vertex(ground: dict, edge_idx: int, end: str) -> float:
     """Angle (radians, CCW from +x) of the edge as seen from one of its endpoints.
 
-    end='src': we are at the src vertex, looking toward dst+wrap (outgoing direction)
-    end='dst': we are at the dst vertex (in adjacent cell if wrap nonzero),
-               looking back toward src-wrap (incoming direction reversed)
+    end='src': we are at the src vertex, looking along the polyline's first
+               segment (outgoing direction).
+    end='dst': we are at the dst vertex, looking back along the polyline's
+               last segment (incoming direction reversed).
+
+    If the edge has a polyline (>= 2 points), uses the first/last polyline
+    segment for the tangent. Otherwise falls back to the straight-line
+    direction from src to dst+wrap.
     """
     e = ground["edges"][edge_idx]
-    src = ground["vertices"][e["src"]]
-    dst = ground["vertices"][e["dst"]]
-    wrap = e["wrap"]
     n_cols = ground["n_cols"]
     n_rows = ground["n_rows"]
     L = ground["lattice"]
     a_vec = (L[0][0], L[0][1])
     b_vec = (L[1][0], L[1][1])
+
+    polyline = e.get("polyline")
+    if polyline and len(polyline) >= 2:
+        if end == "src":
+            p0 = polyline[0]
+            p1 = polyline[1]
+            d_col = p1[0] - p0[0]
+            d_row = p1[1] - p0[1]
+        else:
+            p_last = polyline[-1]
+            p_prev = polyline[-2]
+            d_col = p_prev[0] - p_last[0]
+            d_row = p_prev[1] - p_last[1]
+        dx = (d_col / n_cols) * a_vec[0] + (d_row / n_rows) * b_vec[0]
+        dy = (d_col / n_cols) * a_vec[1] + (d_row / n_rows) * b_vec[1]
+        return math.atan2(dy, dx)
+
+    src = ground["vertices"][e["src"]]
+    dst = ground["vertices"][e["dst"]]
+    wrap = e["wrap"]
     sx = (src[0] / n_cols) * a_vec[0] + (src[1] / n_rows) * b_vec[0]
     sy = (src[0] / n_cols) * a_vec[1] + (src[1] / n_rows) * b_vec[1]
     dx_in = (dst[0] / n_cols) * a_vec[0] + (dst[1] / n_rows) * b_vec[0]
