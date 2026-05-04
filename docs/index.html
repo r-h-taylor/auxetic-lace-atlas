@@ -155,7 +155,7 @@ function renderScatterPlot() {
     }
     points.push({
       family: g.family, name: g.name, nu: nu, eta: eta, cls: cls,
-      source: (g.provenance && g.provenance.source) || 'irvine'
+      source: g.source || 'irvine'
     });
   }
   if (points.length === 0) return;
@@ -180,11 +180,10 @@ function renderScatterPlot() {
   const x = nu => M.left + (nu - nuMin) / (nuMax - nuMin) * innerW;
   const y = eta => M.top + innerH - (eta - etaMin) / (etaMax - etaMin) * innerH;
 
-  // Median lines for the four-corner reference
-  const sortedNus = [...nus].sort((a, b) => a - b);
-  const sortedEtas = [...etas].sort((a, b) => a - b);
-  const nuMed = sortedNus[Math.floor(sortedNus.length / 2)];
-  const etaMed = sortedEtas[Math.floor(sortedEtas.length / 2)];
+  // Reference lines at zero — the physically meaningful threshold.
+  // ν_min < 0  ⇒ auxetic;  η_pore < 0  ⇒ contracts when wet.
+  const nuMed = 0;
+  const etaMed = 0;
 
   // Build SVG
   const svgNS = 'http://www.w3.org/2000/svg';
@@ -305,7 +304,7 @@ function renderScatterPlot() {
   const tooltip = document.getElementById('atlas-scatter-tooltip');
 
   for (const p of points) {
-    const isTaylorBobbin = (p.source === 'taylor_bobbin');
+    const isTaylorBobbin = (p.source === 'taylor');
     let c;
     if (isTaylorBobbin) {
       // Render as plus marker (path with cross shape)
@@ -502,13 +501,14 @@ function renderHeaderStats() {
     .sort((a, b) => (a.beam_default_nu_min || 0) - (b.beam_default_nu_min || 0))
     .slice(0, 10);
   html += '<h3>Top homogeneously-auxetic grounds (beam model, AR=10)</h3>';
-  html += '<p class="muted">Homogeneous auxetics: ν<sub>max</sub> &lt; 0 in every direction. The 11-of-321 most rigorously auxetic subset; click any to inspect.</p>';
+  html += `<p class="muted">Homogeneous auxetics: ν<sub>max</sub> &lt; 0 in every direction. The ${topHom.length}-of-${SUMMARY.length} most rigorously auxetic subset; click any to inspect.</p>`;
   html += '<table class="auxetic-table"><thead><tr>' +
-    '<th>Family</th><th>Name</th><th class="num">ν<sub>min</sub></th><th class="num">ν<sub>max</sub></th><th>Class</th>' +
+    '<th>Family</th><th>Provenance</th><th>Name</th><th class="num">ν<sub>min</sub></th><th class="num">ν<sub>max</sub></th><th>Class</th>' +
     '</tr></thead><tbody>';
   for (const s of topHom) {
     html += `<tr class="clickable-row" data-family="${s.family}" data-name="${s.name}">
       <td><code>${s.family}</code></td>
+      <td>${s.source === "taylor" ? "Taylor" : "Irvine"}</td>
       <td><code>${s.name}</code></td>
       <td class="num">${fmtNu(s.beam_default_nu_min)}</td>
       <td class="num">${fmtNu(s.beam_default_nu_max)}</td>
