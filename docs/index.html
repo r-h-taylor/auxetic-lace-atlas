@@ -29,7 +29,7 @@
   </section>
 
   <section id="atlas-scatter-section">
-    <h2>Mechanical vs. humidity response (321 grounds)</h2>
+    <h2>Mechanical vs. humidity response (360 grounds)</h2>
     <p class="muted">
       Each point is one ground. Hover for details, click to open. Auxetic
       grounds are to the left (negative ν<sub>min</sub>); humidity-active
@@ -154,7 +154,8 @@ function renderScatterPlot() {
       else if (c === 'directionally_auxetic') cls = 'dir';
     }
     points.push({
-      family: g.family, name: g.name, nu: nu, eta: eta, cls: cls
+      family: g.family, name: g.name, nu: nu, eta: eta, cls: cls,
+      source: (g.provenance && g.provenance.source) || 'irvine'
     });
   }
   if (points.length === 0) return;
@@ -300,22 +301,45 @@ function renderScatterPlot() {
 
   // Plot points
   const colorByCls = { hom: '#a83232', dir: '#e08a3e', non: '#7a8a8a' };
+  // Marker shape by source: 'taylor_bobbin' renders as plus; default = circle
   const tooltip = document.getElementById('atlas-scatter-tooltip');
 
   for (const p of points) {
-    const c = document.createElementNS(svgNS, 'circle');
-    c.setAttribute('cx', x(p.nu)); c.setAttribute('cy', y(p.eta));
-    c.setAttribute('r', '4');
-    c.setAttribute('fill', colorByCls[p.cls]);
-    c.setAttribute('fill-opacity', '0.7');
-    c.setAttribute('stroke', '#2a2520');
-    c.setAttribute('stroke-width', '0.5');
+    const isTaylorBobbin = (p.source === 'taylor_bobbin');
+    let c;
+    if (isTaylorBobbin) {
+      // Render as plus marker (path with cross shape)
+      c = document.createElementNS(svgNS, 'path');
+      const cx = x(p.nu), cy = y(p.eta), s = 5;
+      c.setAttribute('d',
+        `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+      c.setAttribute('stroke', colorByCls[p.cls]);
+      c.setAttribute('stroke-width', '2.5');
+      c.setAttribute('stroke-linecap', 'round');
+      c.setAttribute('fill', 'none');
+    } else {
+      c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', x(p.nu)); c.setAttribute('cy', y(p.eta));
+      c.setAttribute('r', '4');
+      c.setAttribute('fill', colorByCls[p.cls]);
+      c.setAttribute('fill-opacity', '0.7');
+      c.setAttribute('stroke', '#2a2520');
+      c.setAttribute('stroke-width', '0.5');
+    }
     c.style.cursor = 'pointer';
     c.dataset.family = p.family; c.dataset.name = p.name;
+    c.dataset.source = p.source;
 
     c.addEventListener('mouseenter', e => {
-      c.setAttribute('r', '6');
-      c.setAttribute('stroke-width', '1.5');
+      if (isTaylorBobbin) {
+        const cx = x(p.nu), cy = y(p.eta), s = 7;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '3.5');
+      } else {
+        c.setAttribute('r', '6');
+        c.setAttribute('stroke-width', '1.5');
+      }
       if (tooltip) {
         tooltip.innerHTML =
           `<strong>${p.family}/${p.name}</strong><br>` +
@@ -333,8 +357,15 @@ function renderScatterPlot() {
       }
     });
     c.addEventListener('mouseleave', e => {
-      c.setAttribute('r', '4');
-      c.setAttribute('stroke-width', '0.5');
+      if (isTaylorBobbin) {
+        const cx = x(p.nu), cy = y(p.eta), s = 5;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '2.5');
+      } else {
+        c.setAttribute('r', '4');
+        c.setAttribute('stroke-width', '0.5');
+      }
       if (tooltip) tooltip.hidden = true;
     });
     c.addEventListener('click', e => {
