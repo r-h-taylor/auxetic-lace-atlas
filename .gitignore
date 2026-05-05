@@ -26,3 +26,12 @@ venv/
 *.orig
 *.rej
 *.patch
+
+# Migration backup files (from in-place script patches)
+*.bak_*
+*.bak
+
+# Local-only experimental / prototype scripts (not for publication)
+medial_explorer.py
+thread_flow_demo.py
+prep_for_publish.py

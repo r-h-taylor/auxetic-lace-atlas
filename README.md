@@ -1,17 +1,18 @@
 # Aux-Mat Atlas
 
 An interactive atlas of mechanical metamaterials derived from bobbin
-lace topologies. Live site: https://auxetic-lace.github.io/atlas/
-([custom domain pending](#deployment))
+lace topologies.
 
 This project takes the public TesseLace catalog of 321 bobbin lace
 ground patterns ([Irvine, 2016](https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92))
 and computes the full 2D mechanical response of each topology under
 two interpretations: an axial-spring framework (pin-jointed limit) and
 an Euler-Bernoulli beam frame (3D-printable structural realization).
-Of the 321 topologies, **52% are directionally auxetic** and **3.4%
-are homogeneously auxetic**, with the strongest candidates achieving
-ν<sub>min</sub> = -2.49.
+The catalog combines the 321 Irvine grounds with 85 additional
+grounds from a constructive generator (Taylor, 2026), totaling
+**406 grounds** spanning 23 face-set families. A substantial
+fraction are auxetic in some loading direction; live statistics
+and per-ground analyses are in the visualizer.
 
 ## What this repo contains
 
@@ -27,7 +28,6 @@ are homogeneously auxetic**, with the strongest candidates achieving
 │   ├── scrape_tesselace.py        # Catalog scraper
 │   ├── canonical/                 # Canonical labeling for graph isomorphism
 │   └── contrib/                   # User contribution pipeline
-├── visualizer/                    # Static HTML/JS frontend
 ├── submissions/                   # Community-contributed graphs (PR target)
 ├── submission_examples/           # Sample submission JSONs
 ├── tests/                         # Unit tests
