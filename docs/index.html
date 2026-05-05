@@ -134,7 +134,7 @@ function thumbPaths(s) {
 
 
 let CURRENT_SCATTER_VIEW = 0;
-const SCATTER_VIEWS = ['humidity', 'stiffness', 'complexity', 'meanaux'];
+const SCATTER_VIEWS = ['humidity', 'stiffness', 'complexity', 'meanaux', 'directionality'];
 
 function renderCurrentScatter() {
   const view = SCATTER_VIEWS[CURRENT_SCATTER_VIEW];
@@ -144,6 +144,8 @@ function renderCurrentScatter() {
     renderComplexityScatter();
   } else if (view === 'meanaux') {
     renderMeanAuxScatter();
+  } else if (view === 'directionality') {
+    renderDirectionalityScatter();
   } else {
     renderHumidityScatter();
   }
@@ -156,7 +158,17 @@ function updateScatterCarouselUi() {
   const indEl = document.getElementById('atlas-scatter-indicator');
   const view = SCATTER_VIEWS[CURRENT_SCATTER_VIEW];
   const n = (ATLAS && ATLAS.summary) ? ATLAS.summary.length : 0;
-  if (view === 'meanaux') {
+  if (view === 'directionality') {
+    if (titleEl) titleEl.textContent = `Directional sensitivity vs. stiffness (${n} grounds, beam, AR=10)`;
+    if (captionEl) captionEl.innerHTML =
+      'x = standard deviation of ν over loading angle '
+      + '(log scale): low values mean Poisson response is '
+      + 'nearly isotropic, high values mean strongly '
+      + 'direction-dependent. y = mean stiffness E_mean (log '
+      + 'scale). Directional auxetics live at high x — their '
+      + 'auxeticity is purchased with strong anisotropy. '
+      + 'Click any point to view that ground in detail.';
+  } else if (view === 'meanaux') {
     if (titleEl) titleEl.textContent = `Mean auxeticness vs. stiffness (${n} grounds, beam, AR=10)`;
     if (captionEl) captionEl.textContent = 'Each point is one ground. x = mean ν over all loading angles '
       + '(captures direction-averaged auxeticness, not just peak); '
@@ -1841,6 +1853,286 @@ async function init() {
 }
 
 init();
+
+
+function renderDirectionalityScatter() {
+  const container = document.getElementById('atlas-scatter');
+  if (!container) return;
+  const summary = (ATLAS && ATLAS.summary) || [];
+  const grounds = (ATLAS && ATLAS.grounds) || [];
+  if (grounds.length === 0) return;
+
+  const summaryByName = {};
+  for (const s of summary) summaryByName[s.name] = s;
+
+  const meta = ATLAS.metadata || {};
+  const bIdx = meta.beam_default_idx ?? 1;
+  const points = [];
+  for (const g of grounds) {
+    if (!g.manufacturability ||
+        g.manufacturability.is_lace_workable !== true) continue;
+    const sEntry = summaryByName[g.name] || {};
+    const nuStd = sEntry.beam_default_nu_std;
+    const E = sEntry.beam_default_E_mean;
+    if (typeof nuStd !== 'number' || typeof E !== 'number') continue;
+    if (!Number.isFinite(nuStd) || !Number.isFinite(E)) continue;
+    if (nuStd <= 0 || E <= 0) continue;
+    let cls = 'non';
+    if (g.beam && g.beam.classification) {
+      const c = g.beam.classification[bIdx];
+      if (c === 'homogeneously_auxetic') cls = 'hom';
+      else if (c === 'directionally_auxetic') cls = 'dir';
+    }
+    points.push({
+      family: g.family, name: g.name, nuStd: nuStd, E: E, cls: cls,
+      source: g.source || 'irvine'
+    });
+  }
+  if (points.length === 0) return;
+
+  const W = 820, H = 480;
+  const M = { top: 24, right: 24, bottom: 60, left: 80 };
+  const innerW = W - M.left - M.right;
+  const innerH = H - M.top - M.bottom;
+
+  const xLogs = points.map(p => Math.log10(p.nuStd));
+  const Es = points.map(p => p.E);
+  let logXMin = Math.min(...xLogs), logXMax = Math.max(...xLogs);
+  let logEMin = Math.log10(Math.min(...Es));
+  let logEMax = Math.log10(Math.max(...Es));
+  const xPad = (logXMax - logXMin) * 0.05;
+  logXMin -= xPad; logXMax += xPad;
+  const lePad = (logEMax - logEMin) * 0.05;
+  logEMin -= lePad; logEMax += lePad;
+
+  const x = nuStd =>
+    M.left + (Math.log10(nuStd) - logXMin) / (logXMax - logXMin) * innerW;
+  const y = E =>
+    M.top + innerH - (Math.log10(E) - logEMin) / (logEMax - logEMin) * innerH;
+
+  container.innerHTML = '';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('class', 'scatter-svg');
+
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', M.left); bg.setAttribute('y', M.top);
+  bg.setAttribute('width', innerW); bg.setAttribute('height', innerH);
+  bg.setAttribute('fill', '#fffaf0');
+  bg.setAttribute('stroke', '#2a2520'); bg.setAttribute('stroke-width', '1');
+  svg.appendChild(bg);
+
+  // X-axis ticks (log decades and half-decades)
+  const xTickValues = [];
+  for (let d = Math.floor(logXMin); d <= Math.ceil(logXMax); d++) {
+    for (const m of [1, 2, 5]) {
+      const v = m * Math.pow(10, d);
+      if (Math.log10(v) >= logXMin && Math.log10(v) <= logXMax) {
+        xTickValues.push(v);
+      }
+    }
+  }
+  for (const xt of xTickValues) {
+    const tx = x(xt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', tx); tick.setAttribute('x2', tx);
+    tick.setAttribute('y1', M.top + innerH);
+    tick.setAttribute('y2', M.top + innerH + 4);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', tx); lbl.setAttribute('y', M.top + innerH + 18);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = xt < 0.01 ? xt.toExponential(0)
+                                 : xt.toFixed(xt < 0.1 ? 3 : 2);
+    svg.appendChild(lbl);
+  }
+
+  // Y-axis ticks (log decades and half-decades)
+  const yTickValues = [];
+  for (let d = Math.floor(logEMin); d <= Math.ceil(logEMax); d++) {
+    for (const m of [1, 2, 5]) {
+      const v = m * Math.pow(10, d);
+      if (Math.log10(v) >= logEMin && Math.log10(v) <= logEMax) {
+        yTickValues.push(v);
+      }
+    }
+  }
+  for (const yt of yTickValues) {
+    const ty = y(yt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', M.left - 4); tick.setAttribute('x2', M.left);
+    tick.setAttribute('y1', ty); tick.setAttribute('y2', ty);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', M.left - 8); lbl.setAttribute('y', ty + 4);
+    lbl.setAttribute('text-anchor', 'end');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = yt < 0.01 ? yt.toExponential(0)
+                                 : yt.toFixed(yt < 0.1 ? 3 : 2);
+    svg.appendChild(lbl);
+  }
+
+  // Axis labels
+  const xL = document.createElementNS(svgNS, 'text');
+  xL.setAttribute('x', M.left + innerW / 2);
+  xL.setAttribute('y', H - 14);
+  xL.setAttribute('text-anchor', 'middle');
+  xL.setAttribute('font-size', '16');
+  xL.setAttribute('font-weight', '700');
+  xL.setAttribute('fill', '#2a2520');
+  xL.textContent = 'std(ν) over angles (beam, AR=10), log scale — directional sensitivity';
+  svg.appendChild(xL);
+
+  const yL = document.createElementNS(svgNS, 'text');
+  yL.setAttribute('x', 18); yL.setAttribute('y', M.top + innerH / 2);
+  yL.setAttribute('text-anchor', 'middle');
+  yL.setAttribute('font-size', '16');
+  yL.setAttribute('font-weight', '700');
+  yL.setAttribute('fill', '#2a2520');
+  yL.setAttribute('transform', `rotate(-90, 18, ${M.top + innerH / 2})`);
+  yL.textContent = 'E_mean (units of EA, log scale)';
+  svg.appendChild(yL);
+
+  // Quadrant captions
+  const captionStyle = (txt, xc, yc, anchor) => {
+    const el = document.createElementNS(svgNS, 'text');
+    el.setAttribute('x', xc); el.setAttribute('y', yc);
+    el.setAttribute('text-anchor', anchor);
+    el.setAttribute('font-size', '12');
+    el.setAttribute('font-style', 'italic');
+    el.setAttribute('fill', '#5a5a5a');
+    el.textContent = txt;
+    return el;
+  };
+  svg.appendChild(captionStyle(
+    'isotropic, stiff', M.left + 14, M.top + 18, 'start'));
+  svg.appendChild(captionStyle(
+    'directional, stiff', M.left + innerW - 14, M.top + 18, 'end'));
+  svg.appendChild(captionStyle(
+    'isotropic, soft', M.left + 14, M.top + innerH - 10, 'start'));
+  svg.appendChild(captionStyle(
+    'directional, soft', M.left + innerW - 14, M.top + innerH - 10, 'end'));
+
+  const colorByCls = { hom: '#a83232', dir: '#e08a3e', non: '#7a8a8a' };
+  const tooltip = document.getElementById('atlas-scatter-tooltip');
+
+  for (const p of points) {
+    const isTaylor = (p.source === 'taylor');
+    let c;
+    if (isTaylor) {
+      c = document.createElementNS(svgNS, 'path');
+      const cx = x(p.nuStd), cy = y(p.E), s = 5;
+      c.setAttribute('d',
+        `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+      c.setAttribute('stroke', colorByCls[p.cls]);
+      c.setAttribute('stroke-width', '2.5');
+      c.setAttribute('stroke-linecap', 'round');
+      c.setAttribute('fill', 'none');
+    } else {
+      c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', x(p.nuStd)); c.setAttribute('cy', y(p.E));
+      c.setAttribute('r', '4');
+      c.setAttribute('fill', colorByCls[p.cls]);
+      c.setAttribute('fill-opacity', '0.7');
+      c.setAttribute('stroke', '#2a2520');
+      c.setAttribute('stroke-width', '0.5');
+    }
+    c.style.cursor = 'pointer';
+
+    c.addEventListener('mouseenter', e => {
+      if (isTaylor) {
+        const cx = x(p.nuStd), cy = y(p.E), s = 7;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '3.5');
+      } else {
+        c.setAttribute('r', '6');
+        c.setAttribute('stroke-width', '1.5');
+      }
+      if (tooltip) {
+        tooltip.innerHTML =
+          `<strong>${p.family}/${p.name}</strong><br>` +
+          `std(ν) = ${p.nuStd.toFixed(3)}<br>` +
+          `E_mean = ${p.E.toExponential(2)}<br>` +
+          `<em>${p.cls === 'hom' ? 'homogeneously auxetic' :
+              p.cls === 'dir' ? 'directionally auxetic' : 'non-auxetic'}</em>`;
+        tooltip.hidden = false;
+      }
+    });
+    c.addEventListener('mousemove', e => {
+      if (tooltip) {
+        tooltip.style.left = (e.pageX + 12) + 'px';
+        tooltip.style.top = (e.pageY + 12) + 'px';
+      }
+    });
+    c.addEventListener('mouseleave', e => {
+      if (isTaylor) {
+        const cx = x(p.nuStd), cy = y(p.E), s = 5;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '2.5');
+      } else {
+        c.setAttribute('r', '4');
+        c.setAttribute('stroke-width', '0.5');
+      }
+      if (tooltip) tooltip.hidden = true;
+    });
+    c.addEventListener('click', e => {
+      if (tooltip) tooltip.hidden = true;
+      openModal(p.family, p.name);
+    });
+    svg.appendChild(c);
+  }
+
+  // Legend
+  const lx = M.left + innerW - 130;
+  const ly = M.top + 10;
+  const legendData = [
+    ['hom', 'homogeneous'],
+    ['dir', 'directional'],
+    ['non', 'non-auxetic'],
+  ];
+  const legendBg = document.createElementNS(svgNS, 'rect');
+  legendBg.setAttribute('x', lx - 14);
+  legendBg.setAttribute('y', ly - 12);
+  legendBg.setAttribute('width', 130);
+  legendBg.setAttribute('height', legendData.length * 16 + 8);
+  legendBg.setAttribute('fill', '#fffaf0');
+  legendBg.setAttribute('fill-opacity', '0.92');
+  legendBg.setAttribute('stroke', '#cfc4ad');
+  legendBg.setAttribute('stroke-width', '0.5');
+  legendBg.setAttribute('rx', '3');
+  svg.appendChild(legendBg);
+  legendData.forEach(([cls, label], i) => {
+    const cy = ly + i * 16;
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', lx); dot.setAttribute('cy', cy);
+    dot.setAttribute('r', '4');
+    dot.setAttribute('fill', colorByCls[cls]);
+    dot.setAttribute('fill-opacity', '0.7');
+    dot.setAttribute('stroke', '#2a2520');
+    dot.setAttribute('stroke-width', '0.5');
+    svg.appendChild(dot);
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', lx + 10); t.setAttribute('y', cy + 4);
+    t.setAttribute('font-size', '12');
+    t.setAttribute('fill', '#2a2520');
+    t.textContent = label;
+    svg.appendChild(t);
+  });
+
+  container.appendChild(svg);
+}
+
 </script>
 
 <!-- Catalog detail modal -->

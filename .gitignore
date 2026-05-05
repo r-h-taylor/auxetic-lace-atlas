@@ -36,3 +36,5 @@ medial_explorer.py
 thread_flow_demo.py
 prep_for_publish.py
 patch_rename_to_pgma.py
+add_nu_std.py
+patch_add_directionality_view.py
