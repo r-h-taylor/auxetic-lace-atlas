@@ -1,18 +1,24 @@
-# Aux-Mat Atlas
+# Periodic Graph Metamaterials Atlas
 
-An interactive atlas of mechanical metamaterials derived from bobbin
-lace topologies.
+An open catalog and analysis framework for two-dimensional periodic
+graph metamaterials. Each entry in the atlas is a 4-regular planar
+periodic graph, analyzed for direction-dependent mechanical response
+(Young's modulus, shear modulus, Poisson ratio, area bulk modulus),
+phonon dispersion, humidity response, and a classification of auxetic
+behavior under both spring-network and Euler-Bernoulli beam frameworks.
 
-This project takes the public TesseLace catalog of 321 bobbin lace
-ground patterns ([Irvine, 2016](https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92))
-and computes the full 2D mechanical response of each topology under
-two interpretations: an axial-spring framework (pin-jointed limit) and
-an Euler-Bernoulli beam frame (3D-printable structural realization).
-The catalog combines the 321 Irvine grounds with 85 additional
-grounds from a constructive generator (Taylor, 2026), totaling
-**406 grounds** spanning 23 face-set families. A substantial
-fraction are auxetic in some loading direction; live statistics
-and per-ground analyses are in the visualizer.
+The current catalog contains **406 grounds** spanning 23 face-set
+families, drawn from:
+
+- **Irvine (2016)** — 321 bobbin lace ground patterns from the public
+  [TesseLace catalog](https://dspace.library.uvic.ca/items/867c403c-4f45-4c54-89d1-1c8d138dfe92)
+- **Taylor (2026)** — 85 additional grounds from a constructive bobbin
+  lace generator
+
+The catalog is under active development; additional generation methods
+(medial-of-tiling, thread-flow construction) are being explored, and
+the analysis pipeline accepts arbitrary submissions meeting the
+structural criteria (4-regular, planar, periodic, lace-workable).
 
 ## What this repo contains
 

@@ -38,10 +38,10 @@ auxetic-lace-rank = "auxetic_lace.contrib.rank_submission:main"
 auxetic-lace-add = "auxetic_lace.contrib.add_to_local_atlas:main"
 
 [project.urls]
-Homepage = "https://github.com/{your-username}/auxetic-lace-atlas"
-Documentation = "https://github.com/{your-username}/auxetic-lace-atlas#readme"
-Repository = "https://github.com/{your-username}/auxetic-lace-atlas"
-Issues = "https://github.com/{your-username}/auxetic-lace-atlas/issues"
+Homepage = "https://github.com/r-h-taylor/auxetic-lace-atlas"
+Documentation = "https://github.com/r-h-taylor/auxetic-lace-atlas#readme"
+Repository = "https://github.com/r-h-taylor/auxetic-lace-atlas"
+Issues = "https://github.com/r-h-taylor/auxetic-lace-atlas/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
