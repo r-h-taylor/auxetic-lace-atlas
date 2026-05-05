@@ -1,0 +1,54 @@
+name: Deploy docs/ to GitHub Pages
+
+# Runs on every push to master, plus manually via the Actions tab
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Only one deployment at a time; cancel any in-progress run when a new
+# push lands
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+# Permissions needed to deploy to Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Pull LFS content so thumbnails are real PNGs, not pointer
+          # files, when published.
+          lfs: true
+
+      - name: Confirm LFS files materialized
+        run: |
+          # Sanity check: file should be PNG, not ASCII text
+          file docs/thumbnails/4/2x1_1/thread.png
+          # Count how many thumbnails ended up as real PNGs
+          n_png=$(find docs/thumbnails -name '*.png' \
+                    -exec file {} \; | grep -c 'PNG image data' || true)
+          echo "PNG files materialized: $n_png"
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
