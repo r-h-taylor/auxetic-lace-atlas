@@ -134,7 +134,7 @@ function thumbPaths(s) {
 
 
 let CURRENT_SCATTER_VIEW = 0;
-const SCATTER_VIEWS = ['humidity', 'stiffness', 'complexity', 'meanaux', 'directionality'];
+const SCATTER_VIEWS = ['humidity', 'stiffness', 'complexity', 'meanaux', 'directionality', 'thermal'];
 
 function renderCurrentScatter() {
   const view = SCATTER_VIEWS[CURRENT_SCATTER_VIEW];
@@ -146,6 +146,8 @@ function renderCurrentScatter() {
     renderMeanAuxScatter();
   } else if (view === 'directionality') {
     renderDirectionalityScatter();
+  } else if (view === 'thermal') {
+    renderThermalScatter();
   } else {
     renderHumidityScatter();
   }
@@ -158,7 +160,16 @@ function updateScatterCarouselUi() {
   const indEl = document.getElementById('atlas-scatter-indicator');
   const view = SCATTER_VIEWS[CURRENT_SCATTER_VIEW];
   const n = (ATLAS && ATLAS.summary) ? ATLAS.summary.length : 0;
-  if (view === 'directionality') {
+  if (view === 'thermal') {
+    if (titleEl) titleEl.textContent = `Thermal amplification vs. auxeticity (${n} grounds, warp/weft bimaterial)`;
+    if (captionEl) captionEl.textContent = 'Each point is one ground. x = peak auxeticness (ν_min, beam AR=10); '
+      + 'y = thermal amplification |α_eff| under unit differential CTE between '
+      + 'horizontal (warp) and vertical (weft) struts. Cloth baseline ≈ √2 ≈ 1.41 '
+      + '(decoupled axes); higher values mean the lattice geometry amplifies '
+      + 'differential thermal expansion; lower values mean the structure suppresses '
+      + 'it (frustrated bimaterial response). Top-left = auxetic + thermally '
+      + 'responsive (best for thermally-adaptive auxetic textiles).';
+  } else if (view === 'directionality') {
     if (titleEl) titleEl.textContent = `Directional sensitivity vs. stiffness (${n} grounds, beam, AR=10)`;
     if (captionEl) captionEl.innerHTML =
       'x = standard deviation of ν over loading angle '
@@ -2077,6 +2088,298 @@ function renderDirectionalityScatter() {
     c.addEventListener('mouseleave', e => {
       if (isTaylor) {
         const cx = x(p.nuStd), cy = y(p.E), s = 5;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '2.5');
+      } else {
+        c.setAttribute('r', '4');
+        c.setAttribute('stroke-width', '0.5');
+      }
+      if (tooltip) tooltip.hidden = true;
+    });
+    c.addEventListener('click', e => {
+      if (tooltip) tooltip.hidden = true;
+      openModal(p.family, p.name);
+    });
+    svg.appendChild(c);
+  }
+
+  // Legend
+  const lx = M.left + innerW - 130;
+  const ly = M.top + 10;
+  const legendData = [
+    ['hom', 'homogeneous'],
+    ['dir', 'directional'],
+    ['non', 'non-auxetic'],
+  ];
+  const legendBg = document.createElementNS(svgNS, 'rect');
+  legendBg.setAttribute('x', lx - 14);
+  legendBg.setAttribute('y', ly - 12);
+  legendBg.setAttribute('width', 130);
+  legendBg.setAttribute('height', legendData.length * 16 + 8);
+  legendBg.setAttribute('fill', '#fffaf0');
+  legendBg.setAttribute('fill-opacity', '0.92');
+  legendBg.setAttribute('stroke', '#cfc4ad');
+  legendBg.setAttribute('stroke-width', '0.5');
+  legendBg.setAttribute('rx', '3');
+  svg.appendChild(legendBg);
+  legendData.forEach(([cls, label], i) => {
+    const cy = ly + i * 16;
+    const dot = document.createElementNS(svgNS, 'circle');
+    dot.setAttribute('cx', lx); dot.setAttribute('cy', cy);
+    dot.setAttribute('r', '4');
+    dot.setAttribute('fill', colorByCls[cls]);
+    dot.setAttribute('fill-opacity', '0.7');
+    dot.setAttribute('stroke', '#2a2520');
+    dot.setAttribute('stroke-width', '0.5');
+    svg.appendChild(dot);
+    const t = document.createElementNS(svgNS, 'text');
+    t.setAttribute('x', lx + 10); t.setAttribute('y', cy + 4);
+    t.setAttribute('font-size', '12');
+    t.setAttribute('fill', '#2a2520');
+    t.textContent = label;
+    svg.appendChild(t);
+  });
+
+  container.appendChild(svg);
+}
+
+function renderThermalScatter() {
+  const container = document.getElementById('atlas-scatter');
+  if (!container) return;
+  const summary = (ATLAS && ATLAS.summary) || [];
+  const grounds = (ATLAS && ATLAS.grounds) || [];
+  if (grounds.length === 0) return;
+
+  const summaryByName = {};
+  for (const s of summary) summaryByName[s.name] = s;
+
+  const meta = ATLAS.metadata || {};
+  const bIdx = meta.beam_default_idx ?? 1;
+  const points = [];
+  for (const g of grounds) {
+    if (!g.manufacturability ||
+        g.manufacturability.is_lace_workable !== true) continue;
+    const sEntry = summaryByName[g.name] || {};
+    const nuMin = sEntry.beam_default_nu_min;
+    const amp = sEntry.thermal_amplification;
+    if (typeof nuMin !== 'number' || typeof amp !== 'number') continue;
+    if (!Number.isFinite(nuMin) || !Number.isFinite(amp)) continue;
+    let cls = 'non';
+    if (g.beam && g.beam.classification) {
+      const c = g.beam.classification[bIdx];
+      if (c === 'homogeneously_auxetic') cls = 'hom';
+      else if (c === 'directionally_auxetic') cls = 'dir';
+    }
+    points.push({
+      family: g.family, name: g.name, nuMin: nuMin, amp: amp, cls: cls,
+      source: g.source || 'irvine'
+    });
+  }
+  if (points.length === 0) return;
+
+  const W = 820, H = 480;
+  const M = { top: 24, right: 24, bottom: 60, left: 80 };
+  const innerW = W - M.left - M.right;
+  const innerH = H - M.top - M.bottom;
+
+  const xs = points.map(p => p.nuMin);
+  const ys = points.map(p => p.amp);
+  let xMin = Math.min(...xs), xMax = Math.max(...xs);
+  let yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const xPad = (xMax - xMin) * 0.05;
+  xMin -= xPad; xMax += xPad;
+  const yPad = (yMax - yMin) * 0.05;
+  yMin -= yPad; yMax += yPad;
+  // Pin yMin to 0 if very close (cleaner reading)
+  if (yMin > -0.05 && yMin < 0.05) yMin = 0;
+
+  const x = nu => M.left + (nu - xMin) / (xMax - xMin) * innerW;
+  const y = a => M.top + innerH - (a - yMin) / (yMax - yMin) * innerH;
+
+  container.innerHTML = '';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('class', 'scatter-svg');
+
+  const bg = document.createElementNS(svgNS, 'rect');
+  bg.setAttribute('x', M.left); bg.setAttribute('y', M.top);
+  bg.setAttribute('width', innerW); bg.setAttribute('height', innerH);
+  bg.setAttribute('fill', '#fffaf0');
+  bg.setAttribute('stroke', '#2a2520'); bg.setAttribute('stroke-width', '1');
+  svg.appendChild(bg);
+
+  // x=0 reference line (auxetic boundary)
+  if (xMin <= 0 && 0 <= xMax) {
+    const v = document.createElementNS(svgNS, 'line');
+    v.setAttribute('x1', x(0)); v.setAttribute('x2', x(0));
+    v.setAttribute('y1', M.top); v.setAttribute('y2', M.top + innerH);
+    v.setAttribute('stroke', '#bbb'); v.setAttribute('stroke-width', '1');
+    v.setAttribute('stroke-dasharray', '3,3');
+    svg.appendChild(v);
+  }
+
+  // y = sqrt(2) reference line (cloth baseline for decoupled bimaterial)
+  const sqrt2 = Math.SQRT2;
+  if (yMin <= sqrt2 && sqrt2 <= yMax) {
+    const h = document.createElementNS(svgNS, 'line');
+    h.setAttribute('x1', M.left); h.setAttribute('x2', M.left + innerW);
+    h.setAttribute('y1', y(sqrt2)); h.setAttribute('y2', y(sqrt2));
+    h.setAttribute('stroke', '#bbb'); h.setAttribute('stroke-width', '1');
+    h.setAttribute('stroke-dasharray', '3,3');
+    svg.appendChild(h);
+    // Label the reference line (below it, inset from left to avoid
+    // the top-left quadrant caption above)
+    const refLabel = document.createElementNS(svgNS, 'text');
+    refLabel.setAttribute('x', M.left + 14);
+    refLabel.setAttribute('y', y(sqrt2) + 14);
+    refLabel.setAttribute('text-anchor', 'start');
+    refLabel.setAttribute('font-size', '11');
+    refLabel.setAttribute('font-style', 'italic');
+    refLabel.setAttribute('fill', '#888');
+    refLabel.textContent = 'cloth baseline (√2)';
+    svg.appendChild(refLabel);
+  }
+
+  // X-axis ticks (0.5 steps for nu_min)
+  for (let xt = Math.ceil(xMin * 2) / 2; xt <= Math.floor(xMax * 2) / 2 + 1e-9; xt += 0.5) {
+    xt = Math.round(xt * 10) / 10;
+    if (xt < xMin || xt > xMax) continue;
+    const tx = x(xt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', tx); tick.setAttribute('x2', tx);
+    tick.setAttribute('y1', M.top + innerH);
+    tick.setAttribute('y2', M.top + innerH + 4);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', tx); lbl.setAttribute('y', M.top + innerH + 18);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = xt.toFixed(1);
+    svg.appendChild(lbl);
+  }
+
+  // Y-axis ticks (linear, every 0.25)
+  for (let yt = Math.ceil(yMin * 4) / 4; yt <= Math.floor(yMax * 4) / 4 + 1e-9; yt += 0.25) {
+    yt = Math.round(yt * 100) / 100;
+    if (yt < yMin || yt > yMax) continue;
+    const ty = y(yt);
+    const tick = document.createElementNS(svgNS, 'line');
+    tick.setAttribute('x1', M.left - 4); tick.setAttribute('x2', M.left);
+    tick.setAttribute('y1', ty); tick.setAttribute('y2', ty);
+    tick.setAttribute('stroke', '#2a2520');
+    svg.appendChild(tick);
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', M.left - 8); lbl.setAttribute('y', ty + 4);
+    lbl.setAttribute('text-anchor', 'end');
+    lbl.setAttribute('font-size', '13');
+    lbl.setAttribute('font-weight', '600');
+    lbl.setAttribute('fill', '#2a2520');
+    lbl.textContent = yt.toFixed(2);
+    svg.appendChild(lbl);
+  }
+
+  // Axis labels
+  const xL = document.createElementNS(svgNS, 'text');
+  xL.setAttribute('x', M.left + innerW / 2);
+  xL.setAttribute('y', H - 14);
+  xL.setAttribute('text-anchor', 'middle');
+  xL.setAttribute('font-size', '16');
+  xL.setAttribute('font-weight', '700');
+  xL.setAttribute('fill', '#2a2520');
+  xL.textContent = 'ν_min (beam, AR=10) — peak auxeticness';
+  svg.appendChild(xL);
+
+  const yL = document.createElementNS(svgNS, 'text');
+  yL.setAttribute('x', 18); yL.setAttribute('y', M.top + innerH / 2);
+  yL.setAttribute('text-anchor', 'middle');
+  yL.setAttribute('font-size', '16');
+  yL.setAttribute('font-weight', '700');
+  yL.setAttribute('fill', '#2a2520');
+  yL.setAttribute('transform', `rotate(-90, 18, ${M.top + innerH / 2})`);
+  yL.textContent = 'thermal amplification |α_eff| / |Δα|';
+  svg.appendChild(yL);
+
+  // Quadrant captions
+  const captionStyle = (txt, xc, yc, anchor) => {
+    const el = document.createElementNS(svgNS, 'text');
+    el.setAttribute('x', xc); el.setAttribute('y', yc);
+    el.setAttribute('text-anchor', anchor);
+    el.setAttribute('font-size', '12');
+    el.setAttribute('font-style', 'italic');
+    el.setAttribute('fill', '#5a5a5a');
+    el.textContent = txt;
+    return el;
+  };
+  svg.appendChild(captionStyle(
+    'auxetic + thermally responsive', M.left + 14, M.top + 18, 'start'));
+  svg.appendChild(captionStyle(
+    'cloth-like, decoupled', M.left + innerW - 14, M.top + 18, 'end'));
+  svg.appendChild(captionStyle(
+    'auxetic + thermally suppressed', M.left + 14, M.top + innerH - 10, 'start'));
+  svg.appendChild(captionStyle(
+    'frustrated', M.left + innerW - 14, M.top + innerH - 10, 'end'));
+
+  const colorByCls = { hom: '#a83232', dir: '#e08a3e', non: '#7a8a8a' };
+  const tooltip = document.getElementById('atlas-scatter-tooltip');
+
+  for (const p of points) {
+    const isTaylor = (p.source === 'taylor');
+    let c;
+    if (isTaylor) {
+      c = document.createElementNS(svgNS, 'path');
+      const cx = x(p.nuMin), cy = y(p.amp), s = 5;
+      c.setAttribute('d',
+        `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+      c.setAttribute('stroke', colorByCls[p.cls]);
+      c.setAttribute('stroke-width', '2.5');
+      c.setAttribute('stroke-linecap', 'round');
+      c.setAttribute('fill', 'none');
+    } else {
+      c = document.createElementNS(svgNS, 'circle');
+      c.setAttribute('cx', x(p.nuMin)); c.setAttribute('cy', y(p.amp));
+      c.setAttribute('r', '4');
+      c.setAttribute('fill', colorByCls[p.cls]);
+      c.setAttribute('fill-opacity', '0.7');
+      c.setAttribute('stroke', '#2a2520');
+      c.setAttribute('stroke-width', '0.5');
+    }
+    c.style.cursor = 'pointer';
+
+    c.addEventListener('mouseenter', e => {
+      if (isTaylor) {
+        const cx = x(p.nuMin), cy = y(p.amp), s = 7;
+        c.setAttribute('d',
+          `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
+        c.setAttribute('stroke-width', '3.5');
+      } else {
+        c.setAttribute('r', '6');
+        c.setAttribute('stroke-width', '1.5');
+      }
+      if (tooltip) {
+        tooltip.innerHTML =
+          `<strong>${p.family}/${p.name}</strong><br>` +
+          `ν_min = ${p.nuMin.toFixed(3)}<br>` +
+          `α_amp = ${p.amp.toFixed(3)}<br>` +
+          `<em>${p.cls === 'hom' ? 'homogeneously auxetic' :
+              p.cls === 'dir' ? 'directionally auxetic' : 'non-auxetic'}</em>`;
+        tooltip.hidden = false;
+      }
+    });
+    c.addEventListener('mousemove', e => {
+      if (tooltip) {
+        tooltip.style.left = (e.pageX + 12) + 'px';
+        tooltip.style.top = (e.pageY + 12) + 'px';
+      }
+    });
+    c.addEventListener('mouseleave', e => {
+      if (isTaylor) {
+        const cx = x(p.nuMin), cy = y(p.amp), s = 5;
         c.setAttribute('d',
           `M ${cx-s} ${cy} L ${cx+s} ${cy} M ${cx} ${cy-s} L ${cx} ${cy+s}`);
         c.setAttribute('stroke-width', '2.5');
